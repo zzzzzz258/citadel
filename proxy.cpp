@@ -323,13 +323,14 @@ void Proxy::handleGet(int client_fd,
   }
   Response parse_res;
   parse_res.ParseLine(server_msg, mes_len);
+
   mtx.lock();
   logFile << id << ": Received \"" << parse_res.getLine() << "\" from " << host
           << std::endl;
   mtx.unlock();
 
   bool is_chunk = findChunk(server_msg, mes_len);
-  if (is_chunk) {
+  if (is_chunk) {  // chunked response, no cache, just resend
     mtx.lock();
     logFile << id << ": not cacheable because it is chunked" << std::endl;
     mtx.unlock();
@@ -350,34 +351,35 @@ void Proxy::handleGet(int client_fd,
     //no-store--store in cache
     bool no_store = false;
     std::string server_msg_str(server_msg, mes_len);
+    // checking no-store header
     size_t nostore_pos;
     if ((nostore_pos = server_msg_str.find("no-store")) != std::string::npos) {
       no_store = true;
     }
     parse_res.ParseField(server_msg, mes_len);
-    printnote(parse_res, id);
+    printnote(parse_res, id);                          // print cache related note
     int content_len = getLength(server_msg, mes_len);  //get content length
-    if (content_len != -1) {
+    if (content_len != -1) {                           // content_len specified
       std::string msg = sendContentLen(
           server_fd, server_msg, mes_len, content_len);  //get the entire message
 
-      if (msg.length() >= 10000000) {
-        std::vector<char> large_msg;
-        for (size_t i = 0; i < msg.length(); i++) {
-          large_msg.push_back(msg[i]);
-        }
-        const char * send_msg = large_msg.data();
-        send(client_fd, send_msg, msg.length(), 0);
+      //if (msg.length() >= 10000000) {
+      std::vector<char> large_msg;
+      for (size_t i = 0; i < msg.length(); i++) {
+        large_msg.push_back(msg[i]);
       }
-      else {
+      const char * send_msg = large_msg.data();
+      send(client_fd, send_msg, msg.length(), 0);
+      //}
+      /*else {
         char send_response[msg.length() + 1];
         msg = msg.append("\0");
         strcpy(send_response, msg.c_str());
         parse_res.setEntireRes(msg);
         send(client_fd, send_response, msg.length(), 0);
-      }
+	}*/
     }
-    else {
+    else {  // content-length not specified, take it as whole message has been received
       std::string server_msg_str(server_msg, mes_len);
       parse_res.setEntireRes(server_msg_str);
       send(client_fd, server_msg, mes_len, 0);
