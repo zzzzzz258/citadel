@@ -13,7 +13,6 @@
 
 #include "client_info.h"
 #include "function.h"
-//pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 std::mutex mtx;
 std::ofstream logFile("proxy.log");
 std::unordered_map<std::string, Response> Cache;
@@ -36,7 +35,6 @@ void Proxy::run() {
       mtx.unlock();
       continue;
     }
-    //    pthread_t thread;
     mtx.lock();
     Client_Info * client_info = new Client_Info();
     client_info->setFd(client_fd);
@@ -44,7 +42,6 @@ void Proxy::run() {
     client_info->setID(id);
     id++;
     mtx.unlock();
-    //pthread_create(&thread, NULL, handle, client_info);
     std::thread(handle, client_info).detach();
   }
 }
@@ -87,7 +84,7 @@ void * Proxy::handle(void * info) {
     std::cout << "Error in build client!\n";
     return NULL;
   }
-  if (parser->method == "CONNECT") {
+  if (parser->method == "CONNECT") {  // handle connect request
     mtx.lock();
     logFile << client_info->getID() << ": "
             << "Requesting \"" << parser->line << "\" from " << host << std::endl;
@@ -97,12 +94,12 @@ void * Proxy::handle(void * info) {
     logFile << client_info->getID() << ": Tunnel closed" << std::endl;
     mtx.unlock();
   }
-  else if (parser->method == "GET") {
+  else if (parser->method == "GET") {  //handle get request
     int id = client_info->getID();
     bool valid = false;
     std::unordered_map<std::string, Response>::iterator it = Cache.begin();
     it = Cache.find(parser->line);
-    if (it == Cache.end()) {
+    if (it == Cache.end()) {  // request not found in cache
       mtx.lock();
       logFile << client_info->getID() << ": not in cache" << std::endl;
       mtx.unlock();
@@ -110,10 +107,10 @@ void * Proxy::handle(void * info) {
       logFile << client_info->getID() << ": "
               << "Requesting \"" << parser->line << "\" from " << host << std::endl;
       mtx.unlock();
-      send(server_fd, req_msg, len, 0);
+      send(server_fd, req_msg, len, 0);  // send request to server
       handleGet(client_fd, server_fd, client_info->getID(), host, parser->line);
     }
-    else {                            //find in cache
+    else {                            //request found in cache
       if (it->second.nocache_flag) {  //has no-cache symbol
         if (revalidation(it->second, parser->input, server_fd, id) ==
             false) {  //check Etag and Last Modified
@@ -136,7 +133,7 @@ void * Proxy::handle(void * info) {
       printcache();
     }
   }
-  else if (parser->method == "POST") {
+  else if (parser->method == "POST") {  //handle post request
     mtx.lock();
     logFile << client_info->getID() << ": "
             << "Requesting \"" << parser->line << "\" from " << host << std::endl;
@@ -263,6 +260,10 @@ bool Proxy::revalidation(Response & rep, std::string input, int server_fd, int i
   }
   return true;  //use from cache
 }
+
+/**
+ * A handler of Post request
+ */
 void Proxy::handlePOST(int client_fd,
                        int server_fd,
                        char * req_msg,
@@ -362,22 +363,13 @@ void Proxy::handleGet(int client_fd,
     if (content_len != -1) {                           // content_len specified
       std::string msg = sendContentLen(
           server_fd, server_msg, mes_len, content_len);  //get the entire message
-
-      //if (msg.length() >= 10000000) {
+      // send response to client
       std::vector<char> large_msg;
       for (size_t i = 0; i < msg.length(); i++) {
         large_msg.push_back(msg[i]);
       }
       const char * send_msg = large_msg.data();
       send(client_fd, send_msg, msg.length(), 0);
-      //}
-      /*else {
-        char send_response[msg.length() + 1];
-        msg = msg.append("\0");
-        strcpy(send_response, msg.c_str());
-        parse_res.setEntireRes(msg);
-        send(client_fd, send_response, msg.length(), 0);
-	}*/
     }
     else {  // content-length not specified, take it as whole message has been received
       std::string server_msg_str(server_msg, mes_len);
