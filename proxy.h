@@ -1,15 +1,26 @@
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <map>
+#include <thread>
+#include <unordered_map>
 
 #include "parse.h"
 #include "pthread.h"
 #include "response.h"
-class proxy {
+class Proxy {
  private:
   const char * port_num;
+  ///  std::ofstream logFile;
+  //  pthread_mutex_t mutex;
+  //  std::unordered_map<std::string, Response> cache;
 
  public:
-  proxy(const char * myport) : port_num(myport) {}
+  Proxy(const char * myport) :
+      port_num(myport)
+  //logFile(logAddr),
+  //mutex(PTHREAD_MUTEX_INITIALIZER)
+  {}
   void run();
   static void * handle(void * arg);
   static void handleConnect(int client_fd, int server_fd, int id);

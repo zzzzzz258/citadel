@@ -4,7 +4,7 @@
 #include "proxy.h"
 int main() {
   const char * port = "12345";
-  proxy * myproxy = new proxy(port);
+  Proxy * myproxy = new Proxy(port);
   myproxy->run();
   return 1;
 }
