@@ -549,12 +549,11 @@ void Proxy::handleConnect(int client_fd, int server_fd, int id) {
         /*if (!passMessage(fd[i], fd[i - 1], message, sizeof(message))) {
           return;
 	  }*/
-        int len = recv(server_fd, buffer, sizeof(buffer), 0);
+        int len = recv(fd[i], buffer, sizeof(buffer), 0);
         if (len <= 0) {
-          std::cout << "chunked break\n";
           return;
         }
-        if (send(client_fd, buffer, len, 0) <= 0) {
+        if (send(fd[i - 1], buffer, len, 0) <= 0) {
           return;
         }
       }
