@@ -330,6 +330,7 @@ void Proxy::handleGet(int client_fd,
   }
   Response parse_res;
   parse_res.ParseLine(server_msg, mes_len);  // parse and get the first line
+  parse_res.response = std::string(server_msg, mes_len);
 
   mtx.lock();
   logFile << id << ": Received \"" << parse_res.getLine() << "\" from " << host
@@ -367,6 +368,7 @@ void Proxy::handleGet(int client_fd,
     if (content_len != -1) {                           // content_len specified
       std::string msg = sendContentLen(
           server_fd, server_msg, mes_len, content_len);  //get the entire message
+      parse_res.response = msg;
       // send response to client
       std::vector<char> large_msg;
       for (size_t i = 0; i < msg.length(); i++) {
@@ -434,7 +436,10 @@ void Proxy::printcachelog(Response & parse_res,
                           bool no_store,
                           std::string req_line,
                           int id) {
-  if (parse_res.response.find("HTTP/1.1 200 OK") != std::string::npos) {
+  mtx.lock();
+  logFile << id << ": function printachelog called " << std::endl;
+  mtx.unlock();
+  if (parse_res.response.find("HTTP/1.1 200 OK") != std::string::npos) { // cacheable response
     if (no_store) {  // no-store specified
       mtx.lock();
       logFile << id << ": not cacheable becaues NO STORE" << std::endl;
@@ -466,6 +471,9 @@ void Proxy::printcachelog(Response & parse_res,
     logFile << id << ": ADD NEW item to cache" << std::endl;
     mtx.unlock();
   }
+  mtx.lock();
+  logFile << id << ": HTTP/1.1 200 OK not found in response, not cache it" << parse_res.LastModified << std::endl;
+  mtx.unlock();
 }
 
 std::string Proxy::sendContentLen(int send_fd,
