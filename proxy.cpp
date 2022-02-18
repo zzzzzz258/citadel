@@ -15,7 +15,7 @@
 #include "function.h"
 std::mutex mtx;
 std::ofstream logFile("proxy.log");
-std::unordered_map<std::string, Response> Cache;
+std::unordered_map<std::string, Response> cache;
 void Proxy::run() {
   int temp_fd = build_server(this->port_num);
   if (temp_fd == -1) {
@@ -35,13 +35,8 @@ void Proxy::run() {
       mtx.unlock();
       continue;
     }
-    mtx.lock();
-    Client_Info * client_info = new Client_Info();
-    client_info->setFd(client_fd);
-    client_info->setIP(ip);
-    client_info->setID(id);
+    Client_Info * client_info = new Client_Info(id, client_fd, ip);
     id++;
-    mtx.unlock();
     std::thread(handle, client_info).detach();
   }
 }
@@ -97,9 +92,9 @@ void * Proxy::handle(void * info) {
   else if (parser->method == "GET") {  //handle get request
     int id = client_info->getID();
     bool valid = false;
-    std::unordered_map<std::string, Response>::iterator it = Cache.begin();
-    it = Cache.find(parser->line);
-    if (it == Cache.end()) {  // request not found in cache
+    std::unordered_map<std::string, Response>::iterator it = cache.begin();
+    it = cache.find(parser->line);
+    if (it == cache.end()) {  // request not found in cache
       mtx.lock();
       logFile << client_info->getID() << ": not in cache" << std::endl;
       mtx.unlock();
@@ -159,6 +154,11 @@ void Proxy::ask_server(int id,
   send(server_fd, req_msg, len, 0);
   handleGet(client_fd, server_fd, id, host, line);
 }
+
+/**
+ * use cached response, send it back to client
+ * @param res is the cached response
+ */
 void Proxy::use_cache(Response & res, int id, int client_fd) {
   char cache_res[res.getSize()];
   const std::vector<char> & response_content = res.getRawContent();
@@ -182,7 +182,7 @@ bool Proxy::CheckTime(int server_fd,
     time_t rep_time = mktime(rep.response_time.getTimeStruct());
     int max_age = rep.max_age;
     if (rep_time + max_age <= curr_time) {
-      Cache.erase(req_line);
+      cache.erase(req_line);
       time_t dead_time = mktime(rep.response_time.getTimeStruct()) + rep.max_age;
       struct tm * asc_time = gmtime(&dead_time);
       const char * t = asctime(asc_time);
@@ -197,7 +197,7 @@ bool Proxy::CheckTime(int server_fd,
     time_t curr_time = time(0);
     time_t expire_time = mktime(rep.expire_time.getTimeStruct());
     if (curr_time > expire_time) {
-      Cache.erase(req_line);
+      cache.erase(req_line);
       time_t dead_time = mktime(rep.expire_time.getTimeStruct());
       struct tm * asc_time = gmtime(&dead_time);
       const char * t = asctime(asc_time);
@@ -397,7 +397,7 @@ void Proxy::Check502(std::string entire_msg, int client_fd, int id) {
 void Proxy::printnote(Response & parse_res, int id) {
   if (parse_res.max_age != -1) {
     mtx.lock();
-    logFile << id << ": NOTE Cache-Control: max-age=" << parse_res.max_age << std::endl;
+    logFile << id << ": NOTE cache-Control: max-age=" << parse_res.max_age << std::endl;
     mtx.unlock();
   }
   if (parse_res.exp_str != "") {
@@ -407,7 +407,7 @@ void Proxy::printnote(Response & parse_res, int id) {
   }
   if (parse_res.no_cache == true) {
     mtx.lock();
-    logFile << id << ": NOTE Cache-Control: no-cache" << std::endl;
+    logFile << id << ": NOTE cache-Control: no-cache" << std::endl;
     mtx.unlock();
   }
   if (parse_res.etag != "") {
@@ -452,11 +452,11 @@ void Proxy::printcachelog(Response & parse_res,
     }
     // not dealing with the situation that neither max-age nor expired-time is sprcified
     Response storedres(parse_res);
-    if (Cache.size() > 10) {
-      std::unordered_map<std::string, Response>::iterator it = Cache.begin();
-      Cache.erase(it);
+    if (cache.size() > 10) {
+      std::unordered_map<std::string, Response>::iterator it = cache.begin();
+      cache.erase(it);
     }
-    Cache.insert(std::pair<std::string, Response>(req_line, storedres));
+    cache.insert(std::pair<std::string, Response>(req_line, storedres));
     mtx.lock();
     logFile << id << ": ADD NEW item to cache" << std::endl;
     mtx.unlock();
