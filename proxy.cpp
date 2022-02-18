@@ -543,18 +543,21 @@ void Proxy::handleConnect(int client_fd, int server_fd, int id) {
 
     select(nfds, &readfds, NULL, NULL, NULL);
     int fd[2] = {server_fd, client_fd};
+    int len;
     for (int i = 0; i < 2; i++) {
       char buffer[65536] = {0};
       if (FD_ISSET(fd[i], &readfds)) {
         /*if (!passMessage(fd[i], fd[i - 1], message, sizeof(message))) {
           return;
 	  }*/
-        int len = recv(fd[i], buffer, sizeof(buffer), 0);
+        len = recv(fd[i], buffer, sizeof(buffer), 0);
         if (len <= 0) {
           return;
         }
-        if (send(fd[i - 1], buffer, len, 0) <= 0) {
-          return;
+        else {
+          if (send(fd[i - 1], buffer, len, 0) <= 0) {
+            return;
+          }
         }
       }
     }
