@@ -1,5 +1,3 @@
-//#include <fcntl.h>
-
 #include <time.h>
 
 #include <cstdio>
@@ -8,37 +6,30 @@
 #include <functional>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include "expiretime.h"
 class Response {
  public:
-  std::string response;
-  std::string line;
-  std::string Etag;
-  std::string Last_modified;
+  std::vector<char> raw_content;
+  std::string start_line;
   int max_age;
   parsetime expire_time;
   std::string exp_str;
   parsetime response_time;
-  bool nocache_flag;
-  std::string ETag;
-  std::string LastModified;
+  bool no_cache;
+  // two validators
+  std::string etag;
+  std::string lastModified;
 
  public:
-  // Response(std::string msg) : response(msg) {}
-  Response() :
-      Etag(""),
-      Last_modified(""),
-      max_age(-1),
-      exp_str(""),
-      nocache_flag(false),
-      ETag(""),
-      LastModified("") {}
-  std::string getLine() { return line; }
-  void ParseLine(char * first_part, int len);
-  void AppendResponse(char *, int len);
-  int getSize();
-  const char * getResponse();
+  Response() : max_age(-1), exp_str(""), no_cache(false), etag(""), lastModified("") {}
+  std::string getStartLine() { return start_line; }
+  void parseStartLine(char * first_part, int len);  // parse and fill start line
+  int getSize();                                    // get raw content size
+  const std::vector<char> & getRawContent();
+  const std::string getRawContentString(int size);
+  void setRawContent(const std::string & msg);
+  void setRawContent(const std::vector<char> & msg);
   void ParseField(char * first_msg, int len);
-  void setEntireRes(std::string msg) { response = msg; }
 };

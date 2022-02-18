@@ -110,8 +110,8 @@ void * Proxy::handle(void * info) {
       send(server_fd, req_msg, len, 0);  // send request to server
       handleGet(client_fd, server_fd, client_info->getID(), host, parser->line);
     }
-    else {                            //request found in cache
-      if (it->second.nocache_flag) {  //has no-cache symbol, revalidate all the time
+    else {                        //request found in cache
+      if (it->second.no_cache) {  //has no-cache symbol, revalidate all the time
         if (revalidation(it->second, parser->input, server_fd, id) ==
             false) {  //check Etag and Last Modified
           ask_server(id, parser->line, req_msg, len, client_fd, server_fd, host);
@@ -130,7 +130,6 @@ void * Proxy::handle(void * info) {
           use_cache(it->second, id, client_fd);
         }
       }
-      printcache();
     }
   }
   else if (parser->method == "POST") {  //handle post request
@@ -162,27 +161,17 @@ void Proxy::ask_server(int id,
 }
 void Proxy::use_cache(Response & res, int id, int client_fd) {
   char cache_res[res.getSize()];
-  strcpy(cache_res, res.getResponse());
+  const std::vector<char> & response_content = res.getRawContent();
+  auto it = response_content.begin();
+  for (int i = 0; i < res.getSize(); i++, it++) {
+    cache_res[i] = *it;
+  }
   send(client_fd, cache_res, res.getSize(), 0);
   mtx.lock();
-  logFile << id << ": Responding \"" << res.line << "\"" << std::endl;
+  logFile << id << ": Responding \"" << res.start_line << "\"" << std::endl;
   mtx.unlock();
 }
-void Proxy::printcache() {
-  std::unordered_map<std::string, Response>::iterator it = Cache.begin();
-  std::cout << "****************Cache****************-" << std::endl;
-  while (it != Cache.end()) {
-    std::cout << "---------------Check Begin---------------" << std::endl;
-    std::cout << "req_line ====== " << it->first << std::endl;
-    std::string header = it->second.response.substr(0, 300);
-    std::cout << "response header in cache =======" << header << std::endl;
-    std::cout << "---------------end of header---------------" << std::endl;
-    ++it;
-  }
-  std::cout << "****************Size*************-" << std::endl;
-  std::cout << "cache.size=" << Cache.size() << std::endl;
-  std::cout << "****************Cache end*************-" << std::endl;
-}
+
 bool Proxy::CheckTime(int server_fd,
                       Request & parser,
                       std::string req_line,
@@ -232,16 +221,16 @@ bool Proxy::CheckTime(int server_fd,
  * @return: true if no need to revalidate, false means revalidation is needed
  */
 bool Proxy::revalidation(Response & rep, std::string input, int server_fd, int id) {
-  if (rep.ETag == "" && rep.LastModified == "") {  // no validator available
+  if (rep.etag == "" && rep.lastModified == "") {  // no validator available
     return true;
   }
   std::string changed_input = input;
-  if (rep.ETag != "") {
-    std::string add_etag = "If-None-Match: " + rep.ETag.append("\r\n");
+  if (rep.etag != "") {
+    std::string add_etag = "If-None-Match: " + rep.etag.append("\r\n");
     changed_input = changed_input.insert(changed_input.length() - 2, add_etag);
   }
-  if (rep.LastModified != "") {
-    std::string add_modified = "If-Modified-Since: " + rep.LastModified.append("\r\n");
+  if (rep.lastModified != "") {
+    std::string add_modified = "If-Modified-Since: " + rep.lastModified.append("\r\n");
     changed_input = changed_input.insert(changed_input.length() - 2, add_modified);
   }
   std::string req_msg_str = changed_input;
@@ -292,9 +281,9 @@ void Proxy::handlePOST(int client_fd,
                             MSG_WAITALL);  //first time received response from server
     if (response_len != 0) {
       Response res;
-      res.ParseLine(req_msg, len);
+      res.parseStartLine(req_msg, len);
       mtx.lock();
-      logFile << id << ": Received \"" << res.getLine() << "\" from " << host
+      logFile << id << ": Received \"" << res.getStartLine() << "\" from " << host
               << std::endl;
       mtx.unlock();
 
@@ -303,7 +292,7 @@ void Proxy::handlePOST(int client_fd,
       send(client_fd, response, response_len, MSG_NOSIGNAL);
 
       mtx.lock();
-      logFile << id << ": Responding \"" << res.getLine() << std::endl;
+      logFile << id << ": Responding \"" << res.getStartLine() << std::endl;
       mtx.unlock();
     }
     else {
@@ -329,11 +318,11 @@ void Proxy::handleGet(int client_fd,
     return;
   }
   Response parse_res;
-  parse_res.ParseLine(server_msg, mes_len);  // parse and get the first line
-  parse_res.response = std::string(server_msg, mes_len);
+  parse_res.parseStartLine(server_msg, mes_len);  // parse and get the first line
+  parse_res.setRawContent(std::string(server_msg, mes_len));
 
   mtx.lock();
-  logFile << id << ": Received \"" << parse_res.getLine() << "\" from " << host
+  logFile << id << ": Received \"" << parse_res.getStartLine() << "\" from " << host
           << std::endl;
   mtx.unlock();
 
@@ -368,18 +357,18 @@ void Proxy::handleGet(int client_fd,
     if (content_len != -1) {                           // content_len specified
       std::string msg = sendContentLen(
           server_fd, server_msg, mes_len, content_len);  //get the entire message
-      parse_res.response = msg;
       // send response to client
       std::vector<char> large_msg;
       for (size_t i = 0; i < msg.length(); i++) {
         large_msg.push_back(msg[i]);
       }
       const char * send_msg = large_msg.data();
+      parse_res.setRawContent(large_msg);
       send(client_fd, send_msg, msg.length(), 0);
     }
     else {  // content-length not specified, take it as whole message has been received
       std::string server_msg_str(server_msg, mes_len);
-      parse_res.setEntireRes(server_msg_str);
+      parse_res.setRawContent(server_msg_str);
       send(client_fd, server_msg, mes_len, 0);
     }
     printcachelog(parse_res, no_store, req_line, id);
@@ -416,19 +405,19 @@ void Proxy::printnote(Response & parse_res, int id) {
     logFile << id << ": NOTE Expires: " << parse_res.exp_str << std::endl;
     mtx.unlock();
   }
-  if (parse_res.nocache_flag == true) {
+  if (parse_res.no_cache == true) {
     mtx.lock();
     logFile << id << ": NOTE Cache-Control: no-cache" << std::endl;
     mtx.unlock();
   }
-  if (parse_res.ETag != "") {
+  if (parse_res.etag != "") {
     mtx.lock();
-    logFile << id << ": NOTE ETag: " << parse_res.ETag << std::endl;
+    logFile << id << ": NOTE etag: " << parse_res.etag << std::endl;
     mtx.unlock();
   }
-  if (parse_res.LastModified != "") {
+  if (parse_res.lastModified != "") {
     mtx.lock();
-    logFile << id << ": NOTE Last-Modified: " << parse_res.LastModified << std::endl;
+    logFile << id << ": NOTE Last-Modified: " << parse_res.lastModified << std::endl;
     mtx.unlock();
   }
 }
@@ -439,8 +428,9 @@ void Proxy::printcachelog(Response & parse_res,
   mtx.lock();
   logFile << id << ": function printachelog called " << std::endl;
   mtx.unlock();
-  if (parse_res.response.find("HTTP/1.1 200 OK") != std::string::npos) { // cacheable response
-    if (no_store) {  // no-store specified
+  if (parse_res.getRawContentString(100).find("HTTP/1.1 200 OK") !=
+      std::string::npos) {  // cacheable response
+    if (no_store) {         // no-store specified
       mtx.lock();
       logFile << id << ": not cacheable becaues NO STORE" << std::endl;
       mtx.unlock();
@@ -472,7 +462,8 @@ void Proxy::printcachelog(Response & parse_res,
     mtx.unlock();
   }
   mtx.lock();
-  logFile << id << ": HTTP/1.1 200 OK not found in response, not cache it" << parse_res.LastModified << std::endl;
+  logFile << id << ": HTTP/1.1 200 OK not found in response, not cache it"
+          << parse_res.lastModified << std::endl;
   mtx.unlock();
 }
 

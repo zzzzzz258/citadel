@@ -1,19 +1,38 @@
 #include "response.h"
 
-void Response::AppendResponse(char * new_part, int len) {
-  std::string new_part_str(new_part, len);
-  response += new_part_str;
+const std::vector<char> & Response::getRawContent() {
+  return raw_content;
 }
-const char * Response::getResponse() {
-  return response.c_str();
+
+const std::string Response::getRawContentString(int size) {
+  if (size > getSize()) {
+    size = getSize();
+  }
+  std::string ans;
+  for (int i = 0; i < size; i++) {
+    ans.push_back(raw_content[i]);
+  }
+  return ans;
 }
+
+void Response::setRawContent(const std::vector<char> & msg) {
+  raw_content = msg;
+}
+
+void Response::setRawContent(const std::string & msg) {
+  raw_content.clear();
+  for (auto it = msg.begin(); it != msg.end(); it++) {
+    raw_content.push_back(*it);
+  }
+}
+
 int Response::getSize() {
-  return response.length();
+  return raw_content.size();
 }
-void Response::ParseLine(char * first_part, int len) {
+void Response::parseStartLine(char * first_part, int len) {
   std::string first_part_str(first_part, len);
   size_t pos = first_part_str.find_first_of("\r\n");
-  line = first_part_str.substr(0, pos);
+  start_line = first_part_str.substr(0, pos);
 }
 
 void Response::ParseField(char * first_msg, int len) {
@@ -37,17 +56,17 @@ void Response::ParseField(char * first_msg, int len) {
   }
   size_t nocatch_pos;
   if ((nocatch_pos = msg.find("no-cache")) != std::string::npos) {
-    nocache_flag = true;
+    no_cache = true;
   }
   size_t etag_pos;
   if ((etag_pos = msg.find("ETag: ")) != std::string::npos) {
     size_t etag_end = msg.find("\r\n", etag_pos + 6);
-    ETag = msg.substr(etag_pos + 6, etag_end - etag_pos - 6);
+    etag = msg.substr(etag_pos + 6, etag_end - etag_pos - 6);
   }
   size_t lastmodified_pos;
   if ((lastmodified_pos = msg.find("Last-Modified: ")) != std::string::npos) {
     size_t lastmodified_end = msg.find("\r\n", lastmodified_pos + 15);
-    LastModified =
+    lastModified =
         msg.substr(lastmodified_pos + 15, lastmodified_end - lastmodified_pos - 15);
   }
 }
