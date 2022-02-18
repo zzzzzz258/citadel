@@ -462,6 +462,9 @@ void Proxy::printcachelog(Response & parse_res,
       Cache.erase(it);
     }
     Cache.insert(std::pair<std::string, Response>(req_line, storedres));
+    mtx.lock();
+    logFile << id << ": ADD NEW item to cache" << std::endl;
+    mtx.unlock();
   }
 }
 
