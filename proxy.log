@@ -1,0 +1,160 @@
+0: "POST http://ocsp.digicert.com/ HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:11 2022
+0: Requesting "POST http://ocsp.digicert.com/ HTTP/1.1" from ocsp.digicert.com
+1: "CONNECT www.youtube.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:12 2022
+1: Requesting "CONNECT www.youtube.com:443 HTTP/1.1" from www.youtube.com
+1: Responding "HTTP/1.1 200 OK"
+2: "CONNECT play.google.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:12 2022
+0: Received "POST http://ocsp.digicert.com/ HTTP/1.1" from ocsp.digicert.com
+0: Responding "POST http://ocsp.digicert.com/ HTTP/1.1
+2: Requesting "CONNECT play.google.com:443 HTTP/1.1" from play.google.com
+2: Responding "HTTP/1.1 200 OK"
+3: "POST http://ocsp.pki.goog/gts1c3 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:12 2022
+3: Requesting "POST http://ocsp.pki.goog/gts1c3 HTTP/1.1" from ocsp.pki.goog
+3: Received "POST http://ocsp.pki.goog/gts1c3 HTTP/1.1" from ocsp.pki.goog
+3: Responding "POST http://ocsp.pki.goog/gts1c3 HTTP/1.1
+5: "CONNECT play.google.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:12 2022
+5: Requesting "CONNECT play.google.com:443 HTTP/1.1" from play.google.com
+5: Responding "HTTP/1.1 200 OK"
+6: "POST http://ocsp.pki.goog/gts1c3 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:12 2022
+6: Requesting "POST http://ocsp.pki.goog/gts1c3 HTTP/1.1" from ocsp.pki.goog
+6: Received "POST http://ocsp.pki.goog/gts1c3 HTTP/1.1" from ocsp.pki.goog
+6: Responding "POST http://ocsp.pki.goog/gts1c3 HTTP/1.1
+7: "CONNECT safebrowsing.googleapis.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:14 2022
+7: Requesting "CONNECT safebrowsing.googleapis.com:443 HTTP/1.1" from safebrowsing.googleapis.com
+7: Responding "HTTP/1.1 200 OK"
+8: "POST http://ocsp.pki.goog/gts1c3 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:14 2022
+8: Requesting "POST http://ocsp.pki.goog/gts1c3 HTTP/1.1" from ocsp.pki.goog
+8: Received "POST http://ocsp.pki.goog/gts1c3 HTTP/1.1" from ocsp.pki.goog
+8: Responding "POST http://ocsp.pki.goog/gts1c3 HTTP/1.1
+7: Tunnel closed
+9: "CONNECT i.ytimg.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:15 2022
+10: "CONNECT yt3.ggpht.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:15 2022
+9: Requesting "CONNECT i.ytimg.com:443 HTTP/1.1" from i.ytimg.com
+9: Responding "HTTP/1.1 200 OK"
+10: Requesting "CONNECT yt3.ggpht.com:443 HTTP/1.1" from yt3.ggpht.com
+10: Responding "HTTP/1.1 200 OK"
+4: WARNING Invalid Request
+11: "CONNECT googleads.g.doubleclick.net:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:20 2022
+11: Requesting "CONNECT googleads.g.doubleclick.net:443 HTTP/1.1" from googleads.g.doubleclick.net
+11: Responding "HTTP/1.1 200 OK"
+12: "CONNECT baidu.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:22 2022
+12: Requesting "CONNECT baidu.com:443 HTTP/1.1" from baidu.com
+12: Responding "HTTP/1.1 200 OK"
+13: "POST http://ocsp.digicert.cn/ HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:22 2022
+13: Requesting "POST http://ocsp.digicert.cn/ HTTP/1.1" from ocsp.digicert.cn
+13: Received "POST http://ocsp.digicert.cn/ HTTP/1.1" from ocsp.digicert.cn
+13: Responding "POST http://ocsp.digicert.cn/ HTTP/1.1
+14: "CONNECT www.baidu.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:23 2022
+14: Requesting "CONNECT www.baidu.com:443 HTTP/1.1" from www.baidu.com
+14: Responding "HTTP/1.1 200 OK"
+16: "CONNECT pss.bdstatic.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:24 2022
+17: "CONNECT hectorstatic.baidu.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:24 2022
+18: "CONNECT mozilla.cloudflare-dns.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:25 2022
+18: Requesting "CONNECT mozilla.cloudflare-dns.com:443 HTTP/1.1" from mozilla.cloudflare-dns.com
+18: Responding "HTTP/1.1 200 OK"
+17: Requesting "CONNECT hectorstatic.baidu.com:443 HTTP/1.1" from hectorstatic.baidu.com
+17: Responding "HTTP/1.1 200 OK"
+16: Requesting "CONNECT pss.bdstatic.com:443 HTTP/1.1" from pss.bdstatic.com
+16: Responding "HTTP/1.1 200 OK"
+19: "CONNECT sp1.baidu.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:26 2022
+20: "CONNECT sp2.baidu.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:26 2022
+20: Requesting "CONNECT sp2.baidu.com:443 HTTP/1.1" from sp2.baidu.com
+20: Responding "HTTP/1.1 200 OK"
+19: Requesting "CONNECT sp1.baidu.com:443 HTTP/1.1" from sp1.baidu.com
+19: Responding "HTTP/1.1 200 OK"
+14: Tunnel closed
+15: "CONNECT www.baidu.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:27 2022
+15: Requesting "CONNECT www.baidu.com:443 HTTP/1.1" from www.baidu.com
+15: Responding "HTTP/1.1 200 OK"
+21: "CONNECT passport.baidu.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:27 2022
+21: Requesting "CONNECT passport.baidu.com:443 HTTP/1.1" from passport.baidu.com
+21: Responding "HTTP/1.1 200 OK"
+22: "CONNECT sp3.baidu.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:27 2022
+22: Requesting "CONNECT sp3.baidu.com:443 HTTP/1.1" from sp3.baidu.com
+22: Responding "HTTP/1.1 200 OK"
+23: "POST http://ocsp2.globalsign.com/gsorganizationvalsha2g2 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:28 2022
+24: "POST http://ocsp2.globalsign.com/gsorganizationvalsha2g2 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:28 2022
+23: Requesting "POST http://ocsp2.globalsign.com/gsorganizationvalsha2g2 HTTP/1.1" from ocsp2.globalsign.com
+24: Requesting "POST http://ocsp2.globalsign.com/gsorganizationvalsha2g2 HTTP/1.1" from ocsp2.globalsign.com
+23: Received "POST http://ocsp2.globalsign.com/gsorganizationvalsha2g2 HTTP/1.1" from ocsp2.globalsign.com
+23: Responding "POST http://ocsp2.globalsign.com/gsorganizationvalsha2g2 HTTP/1.1
+24: Received "POST http://ocsp2.globalsign.com/gsorganizationvalsha2g2 HTTP/1.1" from ocsp2.globalsign.com
+24: Responding "POST http://ocsp2.globalsign.com/gsorganizationvalsha2g2 HTTP/1.1
+25: "CONNECT push.services.mozilla.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:36 2022
+25: Requesting "CONNECT push.services.mozilla.com:443 HTTP/1.1" from push.services.mozilla.com
+25: Responding "HTTP/1.1 200 OK"
+26: "CONNECT neat-iodine-05e.notion.site:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:37 2022
+26: Requesting "CONNECT neat-iodine-05e.notion.site:443 HTTP/1.1" from neat-iodine-05e.notion.site
+26: Responding "HTTP/1.1 200 OK"
+26: Tunnel closed
+27: "POST http://ocsp.digicert.com/ HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:37 2022
+27: Requesting "POST http://ocsp.digicert.com/ HTTP/1.1" from ocsp.digicert.com
+27: Received "POST http://ocsp.digicert.com/ HTTP/1.1" from ocsp.digicert.com
+27: Responding "POST http://ocsp.digicert.com/ HTTP/1.1
+28: "CONNECT firefox.settings.services.mozilla.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:37 2022
+28: Requesting "CONNECT firefox.settings.services.mozilla.com:443 HTTP/1.1" from firefox.settings.services.mozilla.com
+28: Responding "HTTP/1.1 200 OK"
+29: "CONNECT neat-iodine-05e.notion.site:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:37 2022
+29: Requesting "CONNECT neat-iodine-05e.notion.site:443 HTTP/1.1" from neat-iodine-05e.notion.site
+29: Responding "HTTP/1.1 200 OK"
+30: "CONNECT o324374.ingest.sentry.io:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+30: Requesting "CONNECT o324374.ingest.sentry.io:443 HTTP/1.1" from o324374.ingest.sentry.io
+30: Responding "HTTP/1.1 200 OK"
+31: "POST http://r3.o.lencr.org/ HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+31: Requesting "POST http://r3.o.lencr.org/ HTTP/1.1" from r3.o.lencr.org
+33: "CONNECT logs-01.loggly.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+32: "CONNECT logs-01.loggly.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+34: "CONNECT api.statsig.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+33: Requesting "CONNECT logs-01.loggly.com:443 HTTP/1.1" from logs-01.loggly.com
+32: Requesting "CONNECT logs-01.loggly.com:443 HTTP/1.1" from logs-01.loggly.com
+33: Responding "HTTP/1.1 200 OK"
+32: Responding "HTTP/1.1 200 OK"
+31: Received "POST http://r3.o.lencr.org/ HTTP/1.1" from r3.o.lencr.org
+31: Responding "POST http://r3.o.lencr.org/ HTTP/1.1
+36: "CONNECT widget.intercom.io:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+34: Requesting "CONNECT api.statsig.com:443 HTTP/1.1" from api.statsig.com
+34: Responding "HTTP/1.1 200 OK"
+36: Requesting "CONNECT widget.intercom.io:443 HTTP/1.1" from widget.intercom.io
+36: Responding "HTTP/1.1 200 OK"
+37: "POST http://ocsp.starfieldtech.com/ HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+38: "POST http://ocsp.starfieldtech.com/ HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+39: "POST http://r3.o.lencr.org/ HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+38: Requesting "POST http://ocsp.starfieldtech.com/ HTTP/1.1" from ocsp.starfieldtech.com
+37: Requesting "POST http://ocsp.starfieldtech.com/ HTTP/1.1" from ocsp.starfieldtech.com
+39: Requesting "POST http://r3.o.lencr.org/ HTTP/1.1" from r3.o.lencr.org
+40: "CONNECT hkfxbbdzib.notion.so:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+40: Requesting "CONNECT hkfxbbdzib.notion.so:443 HTTP/1.1" from hkfxbbdzib.notion.so
+41: "CONNECT analytics.pgncs.notion.so:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+40: Responding "HTTP/1.1 200 OK"
+42: "CONNECT msgstore.www.notion.so:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+39: Received "POST http://r3.o.lencr.org/ HTTP/1.1" from r3.o.lencr.org
+39: Responding "POST http://r3.o.lencr.org/ HTTP/1.1
+41: Requesting "CONNECT analytics.pgncs.notion.so:443 HTTP/1.1" from analytics.pgncs.notion.so
+41: Responding "HTTP/1.1 200 OK"
+42: Requesting "CONNECT msgstore.www.notion.so:443 HTTP/1.1" from msgstore.www.notion.so
+42: Responding "HTTP/1.1 200 OK"
+38: Received "POST http://ocsp.starfieldtech.com/ HTTP/1.1" from ocsp.starfieldtech.com
+38: Responding "POST http://ocsp.starfieldtech.com/ HTTP/1.1
+43: "CONNECT js.intercomcdn.com:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+37: Received "POST http://ocsp.starfieldtech.com/ HTTP/1.1" from ocsp.starfieldtech.com
+37: Responding "POST http://ocsp.starfieldtech.com/ HTTP/1.1
+43: Requesting "CONNECT js.intercomcdn.com:443 HTTP/1.1" from js.intercomcdn.com
+43: Responding "HTTP/1.1 200 OK"
+44: "POST http://ocsp.sca1b.amazontrust.com/ HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:38 2022
+44: Requesting "POST http://ocsp.sca1b.amazontrust.com/ HTTP/1.1" from ocsp.sca1b.amazontrust.com
+44: Received "POST http://ocsp.sca1b.amazontrust.com/ HTTP/1.1" from ocsp.sca1b.amazontrust.com
+44: Responding "POST http://ocsp.sca1b.amazontrust.com/ HTTP/1.1
+45: "CONNECT msgstore.www.notion.so:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:39 2022
+45: Requesting "CONNECT msgstore.www.notion.so:443 HTTP/1.1" from msgstore.www.notion.so
+45: Responding "HTTP/1.1 200 OK"
+46: "CONNECT api-iam.intercom.io:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:39 2022
+46: Requesting "CONNECT api-iam.intercom.io:443 HTTP/1.1" from api-iam.intercom.io
+46: Responding "HTTP/1.1 200 OK"
+47: "CONNECT nexus-websocket-a.intercom.io:443 HTTP/1.1" from 107.15.54.144 @ Thu Feb 17 21:27:40 2022
+47: Requesting "CONNECT nexus-websocket-a.intercom.io:443 HTTP/1.1" from nexus-websocket-a.intercom.io
+47: Responding "HTTP/1.1 200 OK"
+35: WARNING Invalid Request
+32: Tunnel closed
+33: Tunnel closed
+21: Tunnel closed
+17: Tunnel closed
