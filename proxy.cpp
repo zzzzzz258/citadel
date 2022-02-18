@@ -111,7 +111,7 @@ void * Proxy::handle(void * info) {
       handleGet(client_fd, server_fd, client_info->getID(), host, parser->line);
     }
     else {                            //request found in cache
-      if (it->second.nocache_flag) {  //has no-cache symbol
+      if (it->second.nocache_flag) {  //has no-cache symbol, revalidate all the time
         if (revalidation(it->second, parser->input, server_fd, id) ==
             false) {  //check Etag and Last Modified
           ask_server(id, parser->line, req_msg, len, client_fd, server_fd, host);
@@ -227,8 +227,12 @@ bool Proxy::CheckTime(int server_fd,
   mtx.unlock();
   return true;
 }
+/**
+ * A function to check if revalidation is necessary
+ * @return: true if no need to revalidate, false means revalidation is needed
+ */
 bool Proxy::revalidation(Response & rep, std::string input, int server_fd, int id) {
-  if (rep.ETag == "" && rep.LastModified == "") {
+  if (rep.ETag == "" && rep.LastModified == "") {  // no validator available
     return true;
   }
   std::string changed_input = input;
@@ -241,9 +245,11 @@ bool Proxy::revalidation(Response & rep, std::string input, int server_fd, int i
     changed_input = changed_input.insert(changed_input.length() - 2, add_modified);
   }
   std::string req_msg_str = changed_input;
-  char req_new_msg[req_msg_str.size() + 1];
+  //  char req_new_msg[req_msg_str.size() + 1];
+  const char * req_new_msg = changed_input.c_str();
   int send_len;
-  if ((send_len = send(server_fd, req_new_msg, req_msg_str.size() + 1, 0)) > 0) {
+  if ((send_len = send(server_fd, req_new_msg, req_msg_str.size() + 1, 0)) >
+      0) {  // send request with validator
     std::cout << "Verify: Send success!\n";
   }
   char new_resp[65536] = {0};
@@ -252,7 +258,7 @@ bool Proxy::revalidation(Response & rep, std::string input, int server_fd, int i
     std::cout << "[Verify] received from server failed in checktime" << std::endl;
   }
   std::string checknew(new_resp, new_len);
-  if (checknew.find("HTTP/1.1 200 OK") != std::string::npos) {
+  if (checknew.find("HTTP/1.1 200 OK") != std::string::npos) {  //received a new response
     mtx.lock();
     logFile << id << ": in cache, requires validation" << std::endl;
     mtx.unlock();
@@ -323,7 +329,7 @@ void Proxy::handleGet(int client_fd,
     return;
   }
   Response parse_res;
-  parse_res.ParseLine(server_msg, mes_len);
+  parse_res.ParseLine(server_msg, mes_len);  // parse and get the first line
 
   mtx.lock();
   logFile << id << ": Received \"" << parse_res.getLine() << "\" from " << host
@@ -348,16 +354,14 @@ void Proxy::handleGet(int client_fd,
     }
   }
   else {
-    //int content_len = getLength(server_msg, mes_len);  //get content length
-    //no-store--store in cache
-    bool no_store = false;
     std::string server_msg_str(server_msg, mes_len);
     // checking no-store header
+    bool no_store = false;
     size_t nostore_pos;
     if ((nostore_pos = server_msg_str.find("no-store")) != std::string::npos) {
       no_store = true;
     }
-    parse_res.ParseField(server_msg, mes_len);
+    parse_res.ParseField(server_msg, mes_len);         // fill attributes of response
     printnote(parse_res, id);                          // print cache related note
     int content_len = getLength(server_msg, mes_len);  //get content length
     if (content_len != -1) {                           // content_len specified
@@ -378,6 +382,7 @@ void Proxy::handleGet(int client_fd,
     }
     printcachelog(parse_res, no_store, req_line, id);
   }
+  // print messages
   std::cout << "Responding for GET\n";
   std::string logrespond(server_msg, mes_len);
   size_t log_pos = logrespond.find_first_of("\r\n");
@@ -430,13 +435,13 @@ void Proxy::printcachelog(Response & parse_res,
                           std::string req_line,
                           int id) {
   if (parse_res.response.find("HTTP/1.1 200 OK") != std::string::npos) {
-    if (no_store) {
+    if (no_store) {  // no-store specified
       mtx.lock();
       logFile << id << ": not cacheable becaues NO STORE" << std::endl;
       mtx.unlock();
       return;
     }
-    if (parse_res.max_age != -1) {
+    if (parse_res.max_age != -1) {  // max-age specified
       time_t dead_time =
           mktime(parse_res.response_time.getTimeStruct()) + parse_res.max_age;
       struct tm * asc_time = gmtime(&dead_time);
@@ -450,6 +455,7 @@ void Proxy::printcachelog(Response & parse_res,
       logFile << id << ": cached, expires at " << parse_res.exp_str << std::endl;
       mtx.unlock();
     }
+    // not dealing with the situation that neither max-age nor expired-time is sprcified
     Response storedres(parse_res);
     if (Cache.size() > 10) {
       std::unordered_map<std::string, Response>::iterator it = Cache.begin();
