@@ -90,8 +90,7 @@ void * Proxy::handle(void * info) {
     mtx.unlock();
   }
   else if (parser->method == "GET") {  //handle get request
-    int id = client_info->getID();
-    bool valid = false;
+    int id = client_info->getID();     // thread id for logging
     std::unordered_map<std::string, Response>::iterator it = cache.begin();
     it = cache.find(parser->line);
     if (it == cache.end()) {  // request not found in cache
@@ -116,7 +115,7 @@ void * Proxy::handle(void * info) {
         }
       }
       else {
-        valid =
+        bool valid =
             CheckTime(server_fd, *parser, parser->line, it->second, client_info->getID());
         if (!valid) {  //ask for server,check res and put in cache if needed
           ask_server(id, parser->line, req_msg, len, client_fd, server_fd, host);
@@ -300,6 +299,23 @@ void Proxy::handlePOST(int client_fd,
     }
   }
 }
+
+/**
+ * Transparently pass data from server to client (or inverse)
+ * @return false means error occured in the process
+ */
+bool Proxy::passMessage(int server_fd, int client_fd, char * buffer, size_t buffer_size) {
+  int len = recv(server_fd, buffer, buffer_size, 0);
+  if (len <= 0) {
+    std::cout << "chunked break\n";
+    return false;
+  }
+  if (send(client_fd, buffer, len, 0) <= 0) {
+    return false;
+  }
+  return true;
+}
+
 void Proxy::handleGet(int client_fd,
                       int server_fd,
                       int id,
@@ -317,12 +333,12 @@ void Proxy::handleGet(int client_fd,
   if (mes_len == 0) {
     return;
   }
-  Response parse_res;
-  parse_res.parseStartLine(server_msg, mes_len);  // parse and get the first line
-  parse_res.setRawContent(std::string(server_msg, mes_len));
+  Response response;
+  response.parseStartLine(server_msg, mes_len);  // parse and get the first line
+  response.setRawContent(std::string(server_msg, mes_len));
 
   mtx.lock();
-  logFile << id << ": Received \"" << parse_res.getStartLine() << "\" from " << host
+  logFile << id << ": Received \"" << response.getStartLine() << "\" from " << host
           << std::endl;
   mtx.unlock();
 
@@ -335,12 +351,10 @@ void Proxy::handleGet(int client_fd,
     send(client_fd, server_msg, mes_len, 0);  //send first response to server
     char chunked_msg[28000] = {0};
     while (1) {  //receive and send remaining message
-      int len = recv(server_fd, chunked_msg, sizeof(chunked_msg), 0);
-      if (len <= 0) {
-        std::cout << "chunked break\n";
+      if (!passMessage(server_fd, client_fd, chunked_msg, sizeof(chunked_msg))) {
+        std::cout << "chunked break" << std::endl;
         break;
       }
-      send(client_fd, chunked_msg, len, 0);
     }
   }
   else {
@@ -351,8 +365,8 @@ void Proxy::handleGet(int client_fd,
     if ((nostore_pos = server_msg_str.find("no-store")) != std::string::npos) {
       no_store = true;
     }
-    parse_res.ParseField(server_msg, mes_len);         // fill attributes of response
-    printnote(parse_res, id);                          // print cache related note
+    response.ParseField(server_msg, mes_len);          // fill attributes of response
+    printnote(response, id);                           // print cache related note
     int content_len = getLength(server_msg, mes_len);  //get content length
     if (content_len != -1) {                           // content_len specified
       std::string msg = sendContentLen(
@@ -363,15 +377,15 @@ void Proxy::handleGet(int client_fd,
         large_msg.push_back(msg[i]);
       }
       const char * send_msg = large_msg.data();
-      parse_res.setRawContent(large_msg);
+      response.setRawContent(large_msg);
       send(client_fd, send_msg, msg.length(), 0);
     }
     else {  // content-length not specified, take it as whole message has been received
       std::string server_msg_str(server_msg, mes_len);
-      parse_res.setRawContent(server_msg_str);
+      response.setRawContent(server_msg_str);
       send(client_fd, server_msg, mes_len, 0);
     }
-    printcachelog(parse_res, no_store, req_line, id);
+    printcachelog(response, no_store, req_line, id);
   }
   // print messages
   std::cout << "Responding for GET\n";
@@ -394,41 +408,41 @@ void Proxy::Check502(std::string entire_msg, int client_fd, int id) {
   }
 }
 
-void Proxy::printnote(Response & parse_res, int id) {
-  if (parse_res.max_age != -1) {
+void Proxy::printnote(Response & response, int id) {
+  if (response.max_age != -1) {
     mtx.lock();
-    logFile << id << ": NOTE cache-Control: max-age=" << parse_res.max_age << std::endl;
+    logFile << id << ": NOTE cache-Control: max-age=" << response.max_age << std::endl;
     mtx.unlock();
   }
-  if (parse_res.exp_str != "") {
+  if (response.exp_str != "") {
     mtx.lock();
-    logFile << id << ": NOTE Expires: " << parse_res.exp_str << std::endl;
+    logFile << id << ": NOTE Expires: " << response.exp_str << std::endl;
     mtx.unlock();
   }
-  if (parse_res.no_cache == true) {
+  if (response.no_cache == true) {
     mtx.lock();
     logFile << id << ": NOTE cache-Control: no-cache" << std::endl;
     mtx.unlock();
   }
-  if (parse_res.etag != "") {
+  if (response.etag != "") {
     mtx.lock();
-    logFile << id << ": NOTE etag: " << parse_res.etag << std::endl;
+    logFile << id << ": NOTE etag: " << response.etag << std::endl;
     mtx.unlock();
   }
-  if (parse_res.lastModified != "") {
+  if (response.lastModified != "") {
     mtx.lock();
-    logFile << id << ": NOTE Last-Modified: " << parse_res.lastModified << std::endl;
+    logFile << id << ": NOTE Last-Modified: " << response.lastModified << std::endl;
     mtx.unlock();
   }
 }
-void Proxy::printcachelog(Response & parse_res,
+void Proxy::printcachelog(Response & response,
                           bool no_store,
                           std::string req_line,
                           int id) {
   mtx.lock();
   logFile << id << ": function printachelog called " << std::endl;
   mtx.unlock();
-  if (parse_res.getRawContentString(100).find("HTTP/1.1 200 OK") !=
+  if (response.getRawContentString(100).find("HTTP/1.1 200 OK") !=
       std::string::npos) {  // cacheable response
     if (no_store) {         // no-store specified
       mtx.lock();
@@ -436,22 +450,22 @@ void Proxy::printcachelog(Response & parse_res,
       mtx.unlock();
       return;
     }
-    if (parse_res.max_age != -1) {  // max-age specified
+    if (response.max_age != -1) {  // max-age specified
       time_t dead_time =
-          mktime(parse_res.response_time.getTimeStruct()) + parse_res.max_age;
+          mktime(response.response_time.getTimeStruct()) + response.max_age;
       struct tm * asc_time = gmtime(&dead_time);
       const char * t = asctime(asc_time);
       mtx.lock();
       logFile << id << ": cached, expires at " << t << std::endl;
       mtx.unlock();
     }
-    else if (parse_res.exp_str != "") {
+    else if (response.exp_str != "") {
       mtx.lock();
-      logFile << id << ": cached, expires at " << parse_res.exp_str << std::endl;
+      logFile << id << ": cached, expires at " << response.exp_str << std::endl;
       mtx.unlock();
     }
     // not dealing with the situation that neither max-age nor expired-time is sprcified
-    Response storedres(parse_res);
+    Response storedres(response);
     if (cache.size() > 10) {
       std::unordered_map<std::string, Response>::iterator it = cache.begin();
       cache.erase(it);
@@ -463,7 +477,7 @@ void Proxy::printcachelog(Response & parse_res,
   }
   mtx.lock();
   logFile << id << ": HTTP/1.1 200 OK not found in response, not cache it"
-          << parse_res.lastModified << std::endl;
+          << response.lastModified << std::endl;
   mtx.unlock();
 }
 
@@ -533,14 +547,8 @@ void Proxy::handleConnect(int client_fd, int server_fd, int id) {
     for (int i = 0; i < 2; i++) {
       char message[65536] = {0};
       if (FD_ISSET(fd[i], &readfds)) {
-        len = recv(fd[i], message, sizeof(message), 0);
-        if (len <= 0) {
+        if (!passMessage(fd[i], fd[i - 1], message, sizeof(message))) {
           return;
-        }
-        else {
-          if (send(fd[1 - i], message, len, 0) <= 0) {
-            return;
-          }
         }
       }
     }

@@ -60,6 +60,10 @@ class Proxy {
                          int client_fd,
                          int server_fd,
                          const char * host);
+  static bool passMessage(int server_fd,
+                          int client_fd,
+                          char * buffer,
+                          size_t buffer_size);
   static void use_cache(Response & res, int id, int client_fd);
   static bool revalidation(Response & rep, std::string input, int server_fd, int id);
   static void Check502(std::string entire_msg, int client_fd, int id);
