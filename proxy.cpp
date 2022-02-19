@@ -109,7 +109,8 @@ void * Proxy::handle(void * info) {
       if (request->no_cache ||
           it->second.no_cache) {  //has no-cache symbol, revalidate all the time
         mtx.lock();
-        logFile << id << ": in cache, requires validation" << std::endl;
+        //logFile << id << ": in cache, requires validation" << std::endl;
+        logFile << id << ": in cache, requires validation cuz no-cache" << std::endl;
         mtx.unlock();
         if (revalidation(it->second, request->raw_content, server_fd, id) ==
             false) {  //check Etag and Last Modified
@@ -192,7 +193,7 @@ bool Proxy::CheckTime(int server_fd,
     if (rep_time + max_age <= curr_time) {  // stale
       if (rep.must_revalidate) {            // validation required
         mtx.lock();
-        logFile << id << ": in cache, requires validation" << std::endl;
+        logFile << id << ": in cache, requires validation cuz must-validate" << std::endl;
         mtx.unlock();
         return revalidation(rep, request.raw_content, server_fd, id);
       }
@@ -212,7 +213,7 @@ bool Proxy::CheckTime(int server_fd,
     if (curr_time > expire_time) {
       if (rep.must_revalidate) {  // validation required
         mtx.lock();
-        logFile << id << ": in cache, requires validation" << std::endl;
+        logFile << id << ": in cache, requires validation cuz must-validate" << std::endl;
         mtx.unlock();
         return revalidation(rep, request.raw_content, server_fd, id);
       }
