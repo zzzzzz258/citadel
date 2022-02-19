@@ -13,6 +13,7 @@
 
 #include "client_info.h"
 #include "function.h"
+
 std::mutex mtx;
 std::ofstream logFile("proxy.log");
 std::unordered_map<std::string, Response> cache;
@@ -194,9 +195,9 @@ bool Proxy::checkNotExpired(int server_fd,
                             Response & rep,
                             int id) {
   if (rep.max_age != -1) {
-    time_t curr_time; // this time is in current time zone
+    time_t curr_time;  // this time is in current time zone
     time(&curr_time);
-    curr_time += 5*60*60;
+    curr_time += 5 * 60 * 60;
     time_t rep_time = mktime(rep.response_time.getTimeStruct());
     int max_age = rep.max_age;
     std::cout << rep_time << " compared with " << curr_time << std::endl;
@@ -218,9 +219,11 @@ bool Proxy::checkNotExpired(int server_fd,
     }
   }
   else if (rep.exp_str != "") {
-    time_t curr_time = time(0);
+    time_t curr_time;  // this time is in current time zone
+    time(&curr_time);
+    curr_time += 5 * 60 * 60;
     time_t expire_time = mktime(rep.expire_time.getTimeStruct());
-    if (curr_time > expire_time) {
+    if (curr_time >= expire_time) {
       if (rep.must_revalidate) {  // validation required
         mtx.lock();
         logFile << id << ": in cache, requires validation cuz must-validate" << std::endl;
@@ -587,4 +590,11 @@ std::string Proxy::getTime() {
   struct tm * nowTime = gmtime(&currTime);
   const char * t = asctime(nowTime);
   return std::string(t);
+}
+
+time_t getCurrentUTCTime() {
+  time_t curr_time;  // this time is in current time zone
+  ::time(&curr_time);
+  curr_time += 5 * 60 * 60;
+  return curr_time;
 }

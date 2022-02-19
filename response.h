@@ -8,15 +8,15 @@
 #include <string>
 #include <vector>
 
-#include "expiretime.h"
+#include "mytime.h"
 class Response {
  public:
   std::vector<char> raw_content;
   std::string start_line;
   int max_age;
-  parsetime expire_time;
+  MyTime expire_time;
   std::string exp_str;
-  parsetime response_time;
+  MyTime response_time;
   bool no_cache;
   bool must_revalidate;
   // two validators
