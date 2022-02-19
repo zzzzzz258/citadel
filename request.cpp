@@ -41,5 +41,7 @@ void Request::parseNoCache() {
   size_t nocatch_pos;
   if ((nocatch_pos = raw_content.find("no-cache")) != std::string::npos) {
     no_cache = true;
+  } else {
+    no_cache = false;
   }
 }
