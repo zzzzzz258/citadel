@@ -66,11 +66,10 @@ void * Proxy::handle(void * info) {
   }
   if (request->method != "POST" && request->method != "GET" &&
       request->method != "CONNECT") {
-    const char * req400 = "HTTP/1.1 400 Bad Request";
-    send(client_fd, req400, sizeof(req400), 0);
     mtx.lock();
-    logFile << client_info->getID() << ": Responding \"" << req400 << "\"" << std::endl;
+    logFile << client_info->getID() << ": Unsupported request method " << request->method << std::endl;
     mtx.unlock();
+    close(client_fd);
     return NULL;
   }
   mtx.lock();
