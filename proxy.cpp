@@ -61,12 +61,13 @@ void * Proxy::handle(void * info) {
   if (request->no_cache) {
     mtx.lock();
     logFile << client_info->getID() << ": NOTE Request with no cache" << std::endl;
-    std::cout<< request->raw_content << std::endl;
+    std::cout << request->raw_content << std::endl;
     mtx.unlock();
   }
   if (request->method != "POST" && request->method != "GET" &&
       request->method != "CONNECT") {
     const char * req400 = "HTTP/1.1 400 Bad Request";
+    send(client_fd, req400, sizeof(req400), 0);
     mtx.lock();
     logFile << client_info->getID() << ": Responding \"" << req400 << "\"" << std::endl;
     mtx.unlock();
