@@ -5,14 +5,17 @@
 #include <cstring>
 #include <iostream>
 
+/**
+ * Store basic information of connected client
+ */
 class Client_Info {
  private:
   int id;
   int client_fd;
-  //struct sockaddr_storage client_addr;
   std::string ip;
 
  public:
+  Client_Info(int _id, int _fd, std::string & _ip) : id(_id), client_fd(_fd), ip(_ip) {}
   void setFd(int my_client_fd) { client_fd = my_client_fd; }
   int getFd() { return client_fd; }
   void setIP(std::string myip) { ip = myip; }

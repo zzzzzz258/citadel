@@ -6,8 +6,8 @@
 #include <thread>
 #include <unordered_map>
 
-#include "parse.h"
 #include "pthread.h"
+#include "request.h"
 #include "response.h"
 class Proxy {
  private:
@@ -54,14 +54,18 @@ class Proxy {
                             std::string req_line,
                             int id);
   static void printnote(Response & parse_res, int id);
-  static void ask_server(int id,
-                         std::string line,
-                         char * req_msg,
-                         int len,
-                         int client_fd,
-                         int server_fd,
-                         const char * host);
-  static void use_cache(Response & res, int id, int client_fd);
+  static void sendReqAndHandleResp(int id,
+                                   std::string line,
+                                   char * req_msg,
+                                   int len,
+                                   int client_fd,
+                                   int server_fd,
+                                   const char * host);
+  static bool passMessage(int server_fd,
+                          int client_fd,
+                          char * buffer,
+                          size_t buffer_size);
+  static void sendCachedResp(Response & res, int id, int client_fd);
   static bool revalidation(Response & rep, std::string input, int server_fd, int id);
   static void Check502(std::string entire_msg, int client_fd, int id);
 
