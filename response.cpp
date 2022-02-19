@@ -45,7 +45,9 @@ void Response::parseField(char * first_msg, int len) {
   }
   size_t max_age_pos;
   if ((max_age_pos = msg.find("max-age=")) != std::string::npos) {
-    std::string max_age_str = msg.substr(max_age_pos + 8);
+    size_t max_age_end_pos = msg.find("\r\n", max_age_pos);
+    std::string max_age_str = msg.substr(max_age_pos, max_age_end_pos);
+    std::cout << max_age_str << std::endl;
     max_age = atoi(max_age_str.c_str());
   }
   size_t expire_pos;

@@ -42,11 +42,11 @@ class Proxy {
   static int getLength(char * server_msg, int mes_len);
   static bool findChunk(char * server_msg, int mes_len);
   static std::string getTime();
-  static bool CheckTime(int server_fd,
-                        Request & parser,
-                        std::string req_line,
-                        Response & rep,
-                        int id);
+  static bool checkNotExpired(int server_fd,
+                              Request & parser,
+                              std::string req_line,
+                              Response & rep,
+                              int id);
   static void printcache();
   static void printcachelog(Response & parse_res,
                             bool no_store,
@@ -65,6 +65,6 @@ class Proxy {
                           char * buffer,
                           size_t buffer_size);
   static void sendCachedResp(Response & res, int id, int client_fd);
-  static bool revalidation(Response & rep, std::string input, int server_fd, int id);
+  static bool revalidate(Response & rep, std::string input, int server_fd, int id);
   static void Check502(std::string entire_msg, int client_fd, int id);
 };

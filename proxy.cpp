@@ -114,7 +114,7 @@ void * Proxy::handle(void * info) {
         //logFile << id << ": in cache, requires validation" << std::endl;
         logFile << id << ": in cache, requires validation cuz no-cache" << std::endl;
         mtx.unlock();
-        if (revalidation(it->second, request->raw_content, server_fd, id) ==
+        if (revalidate(it->second, request->raw_content, server_fd, id) ==
             false) {  //check Etag and Last Modified
           sendReqAndHandleResp(
               id, request->start_line, req_msg, len, client_fd, server_fd, host);
@@ -124,7 +124,7 @@ void * Proxy::handle(void * info) {
         }
       }
       else {
-        bool valid = CheckTime(
+        bool valid = checkNotExpired(
             server_fd, *request, request->start_line, it->second, client_info->getID());
         if (!valid) {  //ask for server,check res and put in cache if needed
           sendReqAndHandleResp(
@@ -186,13 +186,13 @@ void Proxy::sendCachedResp(Response & res, int id, int client_fd) {
 
 /**
  * Check if the cached resposne expires
- * @return false if expires or revalidation failed(new request), true use cache
+ * @return false if expires or revalidate failed(new request), true use cache
  */
-bool Proxy::CheckTime(int server_fd,
-                      Request & request,
-                      std::string req_start_line,
-                      Response & rep,
-                      int id) {
+bool Proxy::checkNotExpired(int server_fd,
+                            Request & request,
+                            std::string req_start_line,
+                            Response & rep,
+                            int id) {
   if (rep.max_age != -1) {
     time_t curr_time = time(0);
     time_t rep_time = mktime(rep.response_time.getTimeStruct());
@@ -202,7 +202,7 @@ bool Proxy::CheckTime(int server_fd,
         mtx.lock();
         logFile << id << ": in cache, requires validation cuz must-validate" << std::endl;
         mtx.unlock();
-        return revalidation(rep, request.raw_content, server_fd, id);
+        return revalidate(rep, request.raw_content, server_fd, id);
       }
       cache.erase(req_start_line);
       mtx.lock();
@@ -222,7 +222,7 @@ bool Proxy::CheckTime(int server_fd,
         mtx.lock();
         logFile << id << ": in cache, requires validation cuz must-validate" << std::endl;
         mtx.unlock();
-        return revalidation(rep, request.raw_content, server_fd, id);
+        return revalidate(rep, request.raw_content, server_fd, id);
       }
       cache.erase(req_start_line);
       time_t dead_time = mktime(rep.expire_time.getTimeStruct());
@@ -241,10 +241,10 @@ bool Proxy::CheckTime(int server_fd,
   return true;
 }
 /**
- * A function to check if revalidation is necessary
+ * A function to check if revalidate is necessary
  * @return: true if revalidate successfullly, false for new request
  */
-bool Proxy::revalidation(Response & rep, std::string raw_content, int server_fd, int id) {
+bool Proxy::revalidate(Response & rep, std::string raw_content, int server_fd, int id) {
   if (rep.etag == "" && rep.lastModified == "") {  // no validator available
     return true;
   }
