@@ -18,6 +18,7 @@ class Response {
   std::string exp_str;
   parsetime response_time;
   bool no_cache;
+  bool must_revalidate;
   // two validators
   std::string etag;
   std::string lastModified;
@@ -31,5 +32,5 @@ class Response {
   const std::string getRawContentString(int size);
   void setRawContent(const std::string & msg);
   void setRawContent(const std::vector<char> & msg);
-  void ParseField(char * first_msg, int len);
+  void parseField(char * first_msg, int len);
 };

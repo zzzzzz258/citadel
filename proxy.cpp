@@ -57,9 +57,9 @@ void * Proxy::handle(void * info) {
   if (input == "" || input == "\r" || input == "\n" || input == "\r\n") {
     return NULL;
   }
-  Request * parser = new Request(input);
-  if (parser->method != "POST" && parser->method != "GET" &&
-      parser->method != "CONNECT") {
+  Request * request = new Request(input);
+  if (request->method != "POST" && request->method != "GET" &&
+      request->method != "CONNECT") {
     const char * req400 = "HTTP/1.1 400 Bad Request";
     mtx.lock();
     logFile << client_info->getID() << ": Responding \"" << req400 << "\"" << std::endl;
@@ -67,58 +67,63 @@ void * Proxy::handle(void * info) {
     return NULL;
   }
   mtx.lock();
-  logFile << client_info->getID() << ": \"" << parser->line << "\" from "
+  logFile << client_info->getID() << ": \"" << request->start_line << "\" from "
           << client_info->getIP() << " @ " << getTime().append("\0");
   mtx.unlock();
   std::cout << "received client request is:" << req_msg << "end" << std ::endl;
-  const char * host = parser->host.c_str();
-  const char * port = parser->port.c_str();
+  const char * host = request->host.c_str();
+  const char * port = request->port.c_str();
   std::cout << host << ":" << port << std::endl;
   int server_fd = build_client(host, port);  //connect to server
   if (server_fd == -1) {
     std::cout << "Error in build client!\n";
     return NULL;
   }
-  if (parser->method == "CONNECT") {  // handle connect request
+  if (request->method == "CONNECT") {  // handle connect request
     mtx.lock();
     logFile << client_info->getID() << ": "
-            << "Requesting \"" << parser->line << "\" from " << host << std::endl;
+            << "Requesting \"" << request->start_line << "\" from " << host << std::endl;
     mtx.unlock();
     handleConnect(client_fd, server_fd, client_info->getID());
     mtx.lock();
     logFile << client_info->getID() << ": Tunnel closed" << std::endl;
     mtx.unlock();
   }
-  else if (parser->method == "GET") {  //handle get request
-    int id = client_info->getID();     // thread id for logging
+  else if (request->method == "GET") {  //handle get request
+    int id = client_info->getID();      // thread id for logging
     std::unordered_map<std::string, Response>::iterator it = cache.begin();
-    it = cache.find(parser->line);
+    it = cache.find(request->start_line);
     if (it == cache.end()) {  // request not found in cache
       mtx.lock();
       logFile << client_info->getID() << ": not in cache" << std::endl;
       mtx.unlock();
       mtx.lock();
       logFile << client_info->getID() << ": "
-              << "Requesting \"" << parser->line << "\" from " << host << std::endl;
+              << "Requesting \"" << request->start_line << "\" from " << host
+              << std::endl;
       mtx.unlock();
       send(server_fd, req_msg, len, 0);  // send request to server
-      handleGet(client_fd, server_fd, client_info->getID(), host, parser->line);
+      handleGet(client_fd, server_fd, client_info->getID(), host, request->start_line);
     }
-    else {                        //request found in cache
-      if (it->second.no_cache) {  //has no-cache symbol, revalidate all the time
-        if (revalidation(it->second, parser->input, server_fd, id) ==
+    else {  //request found in cache
+      if (request->no_cache ||
+          it->second.no_cache) {  //has no-cache symbol, revalidate all the time
+        mtx.lock();
+        logFile << id << ": in cache, requires validation" << std::endl;
+        mtx.unlock();
+        if (revalidation(it->second, request->raw_content, server_fd, id) ==
             false) {  //check Etag and Last Modified
-          ask_server(id, parser->line, req_msg, len, client_fd, server_fd, host);
+          ask_server(id, request->start_line, req_msg, len, client_fd, server_fd, host);
         }
         else {
           use_cache(it->second, id, client_fd);
         }
       }
       else {
-        bool valid =
-            CheckTime(server_fd, *parser, parser->line, it->second, client_info->getID());
+        bool valid = CheckTime(
+            server_fd, *request, request->start_line, it->second, client_info->getID());
         if (!valid) {  //ask for server,check res and put in cache if needed
-          ask_server(id, parser->line, req_msg, len, client_fd, server_fd, host);
+          ask_server(id, request->start_line, req_msg, len, client_fd, server_fd, host);
         }
         else {  //send from cache
           use_cache(it->second, id, client_fd);
@@ -126,10 +131,10 @@ void * Proxy::handle(void * info) {
       }
     }
   }
-  else if (parser->method == "POST") {  //handle post request
+  else if (request->method == "POST") {  //handle post request
     mtx.lock();
     logFile << client_info->getID() << ": "
-            << "Requesting \"" << parser->line << "\" from " << host << std::endl;
+            << "Requesting \"" << request->start_line << "\" from " << host << std::endl;
     mtx.unlock();
     handlePOST(client_fd, server_fd, req_msg, len, client_info->getID(), host);
   }
@@ -139,7 +144,7 @@ void * Proxy::handle(void * info) {
 }
 
 void Proxy::ask_server(int id,
-                       std::string line,
+                       std::string start_line,
                        char * req_msg,
                        int len,
                        int client_fd,
@@ -147,11 +152,11 @@ void Proxy::ask_server(int id,
                        const char * host) {
   mtx.lock();
   logFile << id << ": "
-          << "Requesting \"" << line << "\" from " << host << std::endl;
+          << "Requesting \"" << start_line << "\" from " << host << std::endl;
   mtx.unlock();
 
   send(server_fd, req_msg, len, 0);
-  handleGet(client_fd, server_fd, id, host, line);
+  handleGet(client_fd, server_fd, id, host, start_line);
 }
 
 /**
@@ -171,32 +176,47 @@ void Proxy::use_cache(Response & res, int id, int client_fd) {
   mtx.unlock();
 }
 
+/**
+ * Check if the cached resposne expires
+ * @return false if expires or revalidation failed(new request), true use cache
+ */
 bool Proxy::CheckTime(int server_fd,
-                      Request & parser,
-                      std::string req_line,
+                      Request & request,
+                      std::string req_start_line,
                       Response & rep,
                       int id) {
   if (rep.max_age != -1) {
     time_t curr_time = time(0);
     time_t rep_time = mktime(rep.response_time.getTimeStruct());
     int max_age = rep.max_age;
-    if (rep_time + max_age <= curr_time) {
-      cache.erase(req_line);
-      time_t dead_time = mktime(rep.response_time.getTimeStruct()) + rep.max_age;
+    if (rep_time + max_age <= curr_time) {  // stale
+      if (rep.must_revalidate) {            // validation required
+        mtx.lock();
+        logFile << id << ": in cache, requires validation" << std::endl;
+        mtx.unlock();
+        return revalidation(rep, request.raw_content, server_fd, id);
+      }
+      cache.erase(req_start_line);
+      mtx.lock();
+      time_t dead_time = mktime(rep.expire_time.getTimeStruct());
       struct tm * asc_time = gmtime(&dead_time);
       const char * t = asctime(asc_time);
-      mtx.lock();
       logFile << id << ": in cache, but expired at " << t;
       mtx.unlock();
       return false;
     }
   }
-
-  if (rep.exp_str != "") {
+  else if (rep.exp_str != "") {
     time_t curr_time = time(0);
     time_t expire_time = mktime(rep.expire_time.getTimeStruct());
     if (curr_time > expire_time) {
-      cache.erase(req_line);
+      if (rep.must_revalidate) {  // validation required
+        mtx.lock();
+        logFile << id << ": in cache, requires validation" << std::endl;
+        mtx.unlock();
+        return revalidation(rep, request.raw_content, server_fd, id);
+      }
+      cache.erase(req_start_line);
       time_t dead_time = mktime(rep.expire_time.getTimeStruct());
       struct tm * asc_time = gmtime(&dead_time);
       const char * t = asctime(asc_time);
@@ -206,10 +226,7 @@ bool Proxy::CheckTime(int server_fd,
       return false;
     }
   }
-  bool revalid = revalidation(rep, parser.input, server_fd, id);
-  if (revalid == false) {
-    return false;
-  }
+  // no cache-control fields define an expiration time, cache valid
   mtx.lock();
   logFile << id << ": in cache, valid" << std::endl;
   mtx.unlock();
@@ -217,24 +234,26 @@ bool Proxy::CheckTime(int server_fd,
 }
 /**
  * A function to check if revalidation is necessary
- * @return: true if no need to revalidate, false means revalidation is needed
+ * @return: true if revalidate successfullly, false for new request
  */
-bool Proxy::revalidation(Response & rep, std::string input, int server_fd, int id) {
+bool Proxy::revalidation(Response & rep, std::string raw_content, int server_fd, int id) {
   if (rep.etag == "" && rep.lastModified == "") {  // no validator available
     return true;
   }
-  std::string changed_input = input;
+  std::string changed_raw_content = raw_content;
   if (rep.etag != "") {
     std::string add_etag = "If-None-Match: " + rep.etag.append("\r\n");
-    changed_input = changed_input.insert(changed_input.length() - 2, add_etag);
+    changed_raw_content =
+        changed_raw_content.insert(changed_raw_content.length() - 2, add_etag);
   }
   if (rep.lastModified != "") {
     std::string add_modified = "If-Modified-Since: " + rep.lastModified.append("\r\n");
-    changed_input = changed_input.insert(changed_input.length() - 2, add_modified);
+    changed_raw_content =
+        changed_raw_content.insert(changed_raw_content.length() - 2, add_modified);
   }
-  std::string req_msg_str = changed_input;
+  std::string req_msg_str = changed_raw_content;
   //  char req_new_msg[req_msg_str.size() + 1];
-  const char * req_new_msg = changed_input.c_str();
+  const char * req_new_msg = changed_raw_content.c_str();
   int send_len;
   if ((send_len = send(server_fd, req_new_msg, req_msg_str.size() + 1, 0)) >
       0) {  // send request with validator
@@ -247,9 +266,6 @@ bool Proxy::revalidation(Response & rep, std::string input, int server_fd, int i
   }
   std::string checknew(new_resp, new_len);
   if (checknew.find("HTTP/1.1 200 OK") != std::string::npos) {  //received a new response
-    mtx.lock();
-    logFile << id << ": in cache, requires validation" << std::endl;
-    mtx.unlock();
     return false;
   }
   return true;  //use from cache
@@ -320,7 +336,7 @@ void Proxy::handleGet(int client_fd,
                       int server_fd,
                       int id,
                       const char * host,
-                      std::string req_line) {
+                      std::string req_start_line) {
   char server_msg[65536] = {0};
   int mes_len = recv(server_fd,
                      server_msg,
@@ -334,7 +350,8 @@ void Proxy::handleGet(int client_fd,
     return;
   }
   Response response;
-  response.parseStartLine(server_msg, mes_len);  // parse and get the first line
+  response.parseStartLine(server_msg,
+                          mes_len);  // parse and get the first start_line
   response.setRawContent(std::string(server_msg, mes_len));
 
   mtx.lock();
@@ -365,7 +382,7 @@ void Proxy::handleGet(int client_fd,
     if ((nostore_pos = server_msg_str.find("no-store")) != std::string::npos) {
       no_store = true;
     }
-    response.ParseField(server_msg, mes_len);          // fill attributes of response
+    response.parseField(server_msg, mes_len);          // fill attributes of response
     printnote(response, id);                           // print cache related note
     int content_len = getLength(server_msg, mes_len);  //get content length
     if (content_len != -1) {                           // content_len specified
@@ -385,16 +402,16 @@ void Proxy::handleGet(int client_fd,
       response.setRawContent(server_msg_str);
       send(client_fd, server_msg, mes_len, 0);
     }
-    printcachelog(response, no_store, req_line, id);
+    printcachelog(response, no_store, req_start_line, id);
   }
   // print messages
   std::cout << "Responding for GET\n";
   std::string logrespond(server_msg, mes_len);
   size_t log_pos = logrespond.find_first_of("\r\n");
-  std::string log_line = logrespond.substr(0, log_pos);
+  std::string log_start_line = logrespond.substr(0, log_pos);
   mtx.lock();
   std::cout << "logfile responding\n";
-  logFile << id << ": Responding \"" << log_line << "\"" << std::endl;
+  logFile << id << ": Responding \"" << log_start_line << "\"" << std::endl;
   mtx.unlock();
 }
 
@@ -437,7 +454,7 @@ void Proxy::printnote(Response & response, int id) {
 }
 void Proxy::printcachelog(Response & response,
                           bool no_store,
-                          std::string req_line,
+                          std::string req_start_line,
                           int id) {
   mtx.lock();
   logFile << id << ": function printachelog called " << std::endl;
@@ -470,7 +487,7 @@ void Proxy::printcachelog(Response & response,
       std::unordered_map<std::string, Response>::iterator it = cache.begin();
       cache.erase(it);
     }
-    cache.insert(std::pair<std::string, Response>(req_line, storedres));
+    cache.insert(std::pair<std::string, Response>(req_start_line, storedres));
     mtx.lock();
     logFile << id << ": ADD NEW item to cache" << std::endl;
     mtx.unlock();
@@ -546,7 +563,7 @@ void Proxy::handleConnect(int client_fd, int server_fd, int id) {
     for (int i = 0; i < 2; i++) {
       char buffer[65536] = {0};
       if (FD_ISSET(fd[i], &readfds)) {
-        if (!passMessage(fd[i], fd[1-i], buffer, sizeof(buffer))) {
+        if (!passMessage(fd[i], fd[1 - i], buffer, sizeof(buffer))) {
           return;
         }
       }

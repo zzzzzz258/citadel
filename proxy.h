@@ -5,8 +5,8 @@
 #include <thread>
 #include <unordered_map>
 
-#include "parse.h"
 #include "pthread.h"
+#include "request.h"
 #include "response.h"
 class Proxy {
  private:

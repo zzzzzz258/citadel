@@ -35,7 +35,7 @@ void Response::parseStartLine(char * first_part, int len) {
   start_line = first_part_str.substr(0, pos);
 }
 
-void Response::ParseField(char * first_msg, int len) {
+void Response::parseField(char * first_msg, int len) {
   std::string msg(first_msg, len);
   size_t date_pos;
   if ((date_pos = msg.find("Date: ")) != std::string::npos) {
@@ -58,6 +58,11 @@ void Response::ParseField(char * first_msg, int len) {
   if ((nocatch_pos = msg.find("no-cache")) != std::string::npos) {
     no_cache = true;
   }
+  size_t mustrevalidate_pos;
+  if ((mustrevalidate_pos = msg.find("must-revalidate")) != std::string::npos) {
+    no_cache = true;
+  }
+
   size_t etag_pos;
   if ((etag_pos = msg.find("ETag: ")) != std::string::npos) {
     size_t etag_end = msg.find("\r\n", etag_pos + 6);

@@ -1,21 +1,21 @@
-#include "parse.h"
+#include "request.h"
 
 #include <cstring>
 #include <exception>
 #include <iostream>
-void Request::ParseLine() {
-  size_t pos = input.find_first_of("\r\n");
-  line = input.substr(0, pos);
+void Request::parseStartLine() {
+  size_t pos = raw_content.find_first_of("\r\n");
+  start_line = raw_content.substr(0, pos);
 }
-void Request::ParseMethod() {
-  size_t method_end = input.find_first_of(" ");
-  method = input.substr(0, method_end);
+void Request::parseMethod() {
+  size_t method_end = raw_content.find_first_of(" ");
+  method = raw_content.substr(0, method_end);
 }
 
-void Request::ParseInput() {
+void Request::parseRawContent() {
   try {
-    size_t pos = input.find("Host: ");
-    std::string after_host = input.substr(pos + 6);
+    size_t pos = raw_content.find("Host: ");
+    std::string after_host = raw_content.substr(pos + 6);
     size_t host_line_end;
     host_line_end = after_host.find_first_of("\r\n");
     std::string host_line = after_host.substr(0, host_line_end);
@@ -34,5 +34,12 @@ void Request::ParseInput() {
     host = "";
     port = "";
     return;
+  }
+}
+
+void Request::parseNoCache() {
+  size_t nocatch_pos;
+  if ((nocatch_pos = raw_content.find("no-cache")) != std::string::npos) {
+    no_cache = true;
   }
 }
