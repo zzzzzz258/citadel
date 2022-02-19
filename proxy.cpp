@@ -67,7 +67,8 @@ void * Proxy::handle(void * info) {
   if (request->method != "POST" && request->method != "GET" &&
       request->method != "CONNECT") {
     mtx.lock();
-    logFile << client_info->getID() << ": Unsupported request method " << request->method << std::endl;
+    logFile << client_info->getID() << ": Unsupported request method " << request->method
+            << std::endl;
     mtx.unlock();
     close(client_fd);
     return NULL;
@@ -103,13 +104,8 @@ void * Proxy::handle(void * info) {
       mtx.lock();
       logFile << client_info->getID() << ": not in cache" << std::endl;
       mtx.unlock();
-      mtx.lock();
-      logFile << client_info->getID() << ": "
-              << "Requesting \"" << request->start_line << "\" from " << host
-              << std::endl;
-      mtx.unlock();
-      send(server_fd, req_msg, len, 0);  // send request to server
-      handleGet(client_fd, server_fd, client_info->getID(), host, request->start_line);
+      sendReqAndHandleResp(
+          id, request->start_line, req_msg, len, client_fd, server_fd, host);
     }
     else {  //request found in cache
       if (request->no_cache ||
@@ -120,20 +116,22 @@ void * Proxy::handle(void * info) {
         mtx.unlock();
         if (revalidation(it->second, request->raw_content, server_fd, id) ==
             false) {  //check Etag and Last Modified
-          ask_server(id, request->start_line, req_msg, len, client_fd, server_fd, host);
+          sendReqAndHandleResp(
+              id, request->start_line, req_msg, len, client_fd, server_fd, host);
         }
         else {
-          use_cache(it->second, id, client_fd);
+          sendCachedResp(it->second, id, client_fd);
         }
       }
       else {
         bool valid = CheckTime(
             server_fd, *request, request->start_line, it->second, client_info->getID());
         if (!valid) {  //ask for server,check res and put in cache if needed
-          ask_server(id, request->start_line, req_msg, len, client_fd, server_fd, host);
+          sendReqAndHandleResp(
+              id, request->start_line, req_msg, len, client_fd, server_fd, host);
         }
         else {  //send from cache
-          use_cache(it->second, id, client_fd);
+          sendCachedResp(it->second, id, client_fd);
         }
       }
     }
@@ -150,13 +148,16 @@ void * Proxy::handle(void * info) {
   return NULL;
 }
 
-void Proxy::ask_server(int id,
-                       std::string start_line,
-                       char * req_msg,
-                       int len,
-                       int client_fd,
-                       int server_fd,
-                       const char * host) {
+/**
+ * Send request message to server, and handle its response
+ */
+void Proxy::sendReqAndHandleResp(int id,
+                                 std::string start_line,
+                                 char * req_msg,
+                                 int len,
+                                 int client_fd,
+                                 int server_fd,
+                                 const char * host) {
   mtx.lock();
   logFile << id << ": "
           << "Requesting \"" << start_line << "\" from " << host << std::endl;
@@ -170,7 +171,7 @@ void Proxy::ask_server(int id,
  * use cached response, send it back to client
  * @param res is the cached response
  */
-void Proxy::use_cache(Response & res, int id, int client_fd) {
+void Proxy::sendCachedResp(Response & res, int id, int client_fd) {
   char cache_res[res.getSize()];
   const std::vector<char> & response_content = res.getRawContent();
   auto it = response_content.begin();
