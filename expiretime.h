@@ -34,22 +34,23 @@ class timemap {
 
 class parsetime {
  private:
-  struct tm time_struct;
+  struct tm time;
 
  public:
   parsetime() {}
   void init(std::string exp) {
     timemap mymap;
-    time_struct.tm_mday = atoi(exp.substr(5).c_str());
-    time_struct.tm_mon = mymap.getMap(exp.substr(8, 3).c_str()) - 1;
-    time_struct.tm_year = atoi(exp.substr(12).c_str()) - 1900;
-    time_struct.tm_hour = atoi(exp.substr(17).c_str());
-    time_struct.tm_min = atoi(exp.substr(20).c_str());
-    time_struct.tm_sec = atoi(exp.substr(23).c_str());
-    time_struct.tm_wday = mymap.getMap(exp.substr(0, 3).c_str());
-    time_struct.tm_isdst = 0;
+    time.tm_mday = atoi(exp.substr(5).c_str());
+    time.tm_mon = mymap.getMap(exp.substr(8, 3).c_str()) - 1;
+    time.tm_year = atoi(exp.substr(12).c_str()) - 1900;
+    time.tm_hour = atoi(exp.substr(17).c_str());
+    time.tm_min = atoi(exp.substr(20).c_str());
+    time.tm_sec = atoi(exp.substr(23).c_str());
+    time.tm_wday = mymap.getMap(exp.substr(0, 3).c_str());
+    time.tm_isdst = 0;
+    std::cout << "initialize time: " << asctime(&time) << std::endl;
   }
   struct tm * getTimeStruct() {
-    return &time_struct;
+    return &time;
   }
 };
