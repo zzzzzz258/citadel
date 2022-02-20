@@ -6,10 +6,10 @@
 #include <thread>
 #include <unordered_map>
 
+#include "client.h"
 #include "pthread.h"
 #include "request.h"
 #include "response.h"
-#include "client_info.h"
 class Proxy {
  private:
   const char * port_num;

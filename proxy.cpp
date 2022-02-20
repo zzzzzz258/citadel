@@ -49,26 +49,28 @@ void Proxy::run() {
  * @param info is a passenger of information about client
  */
 void Proxy::handle(Client_Info info) {
-  Client_Info * client_info = &info;
-  int client_fd = client_info->getFd();
+  //  Client_Info * client_info = &info;
+  Client client(info);
+  //int client_fd = client_info->getFD();
   char req_msg[65536] = {0};
-  int len = recv(client_fd, req_msg, sizeof(req_msg), 0);  // fisrt request from client
+  int len =
+      recv(client.getFD(), req_msg, sizeof(req_msg), 0);  // fisrt request from client
   if (len <= 2) {
-    printLog(client_info->getID(), ": WARNING Invalid Request");
+    printLog(client.getID(), ": WARNING Invalid Request");
     return;
   }
   std::string input = std::string(req_msg, len);
   Request * request = new Request(input);
   if (request->method != "POST" && request->method != "GET" &&
       request->method != "CONNECT") {  // just shut connect for unsupported methods
-    printLog(client_info->getID(), ": Unsupported request method " + request->method);
-    close(client_fd);
+    printLog(client.getID(), ": Unsupported request method " + request->method);
+    //close(client_fd);
     return;
   }
   //newly added, need test
-  printLog(client_info->getID(),
+  printLog(client.getID(),
            ": \"" + request->start_line + "\" from ",
-           client_info->getIP(),
+           client.getIP(),
            " @ " + getTime().append("\0"));
 
   std::cout << "received client request is:\n" << req_msg << std ::endl;
@@ -80,62 +82,60 @@ void Proxy::handle(Client_Info info) {
     server_fd = build_client(host, port);  //connect to server
   }
   catch (std::exception & e) {
-    printLog(client_info->getID(), std::string(": NOTE ") + e.what());
-    close(client_fd);
+    printLog(client.getID(), std::string(": NOTE ") + e.what());
+    //close(client_fd);
     return;
   }
-  printLog(client_info->getID(), ": NOTE Connect to server successfully");
+  printLog(client.getID(), ": NOTE Connect to server successfully");
   if (request->method == "CONNECT") {  // handle connect request
-    printLog(client_info->getID(),
-             ": Requesting \"" + request->start_line + "\" from " + host);
-    handleConnect(client_fd, server_fd, client_info->getID());
-    printLog(client_info->getID(), ": Tunnel closed");
+    printLog(client.getID(), ": Requesting \"" + request->start_line + "\" from " + host);
+    handleConnect(client.getFD(), server_fd, client.getID());
+    printLog(client.getID(), ": Tunnel closed");
   }
 
   else if (request->method == "GET") {  //handle get request
-    int id = client_info->getID();      // thread id for logging
+    int id = client.getID();            // thread id for logging
     std::unordered_map<std::string, Response>::iterator it = cache.begin();
     it = cache.find(request->start_line);
     if (it == cache.end()) {  // request not found in cache
-      printLog(client_info->getID(), ": not in cache");
+      printLog(client.getID(), ": not in cache");
       sendReqAndHandleResp(
-          id, request->start_line, req_msg, len, client_fd, server_fd, host);
+          id, request->start_line, req_msg, len, client.getFD(), server_fd, host);
     }
     else {  //request found in cache
       if (request->no_cache ||
           it->second.no_cache) {  //has no-cache symbol, revalidate all the time
-        printLog(client_info->getID(), ": in cache, requires validation cuz no-cache");
+        printLog(client.getID(), ": in cache, requires validation cuz no-cache");
 
         if (revalidate(it->second, request->raw_content, server_fd, id) ==
             false) {  //check Etag and Last Modified
           sendReqAndHandleResp(
-              id, request->start_line, req_msg, len, client_fd, server_fd, host);
+              id, request->start_line, req_msg, len, client.getFD(), server_fd, host);
         }
         else {
-          sendCachedResp(it->second, id, client_fd);
+          sendCachedResp(it->second, id, client.getFD());
         }
       }
       else {
         bool valid = checkNotExpired(
-            server_fd, *request, request->start_line, it->second, client_info->getID());
+            server_fd, *request, request->start_line, it->second, client.getID());
 
         if (!valid) {  //ask for server,check res and put in cache if needed
           sendReqAndHandleResp(
-              id, request->start_line, req_msg, len, client_fd, server_fd, host);
+              id, request->start_line, req_msg, len, client.getFD(), server_fd, host);
         }
         else {  //send from cache
-          sendCachedResp(it->second, id, client_fd);
+          sendCachedResp(it->second, id, client.getFD());
         }
       }
     }
   }
   else if (request->method == "POST") {  //handle post request
-    printLog(client_info->getID(),
-             ": Requesting \"" + request->start_line + "\" from " + host);
-    handlePOST(client_fd, server_fd, req_msg, len, client_info->getID(), host);
+    printLog(client.getID(), ": Requesting \"" + request->start_line + "\" from " + host);
+    handlePOST(client.getFD(), server_fd, req_msg, len, client.getID(), host);
   }
   close(server_fd);
-  close(client_fd);
+  //  close(client_fd);
   return;
 }
 
@@ -256,7 +256,7 @@ bool Proxy::revalidate(Response & rep, std::string raw_content, int server_fd, i
     printLog(id, ": NOTE revalidate successfullly");
     return true;
   }
-  return false; 
+  return false;
 }
 
 /**
