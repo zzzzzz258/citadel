@@ -186,6 +186,7 @@ bool Proxy::compareExpiration(int expiration_time,
     printLog(id, ": in cache, but expired at " + std::string(t));
     return false;
   }
+  return true;
 }
 
 /**
@@ -242,11 +243,12 @@ bool Proxy::checkNotExpired(int server_fd,
 
       return false;
     }*/
+  }
     printLog(id, ": in cache, valid");
     // no cache-control fields define an expiration time, cache valid
 
     return true;
-  }
+  
 }
 /**
  * A function to check if revalidate is necessary
