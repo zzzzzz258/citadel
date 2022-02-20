@@ -49,24 +49,26 @@ void Proxy::run() {
  * @param info is a passenger of information about client
  */
 void Proxy::handle(Client_Info info) {
-  Client client(info);
+  Connection connection(info);
   char req_msg[65536] = {0};
-  int len = recv(
-      client.getFD(), req_msg, sizeof(req_msg), 0);  // receive first request from client
+  int len = recv(connection.getClientFD(),
+                 req_msg,
+                 sizeof(req_msg),
+                 0);  // receive first request from client
   if (len <= 2) {
-    printLog(client.getID(), ": WARNING Invalid Request");
+    printLog(connection.getID(), ": WARNING Invalid Request");
     return;
   }
 
   Request request = Request(std::string(req_msg, len));
   if (!request.solvable()) {  // just shut connect for unsupported methods
-    printLog(client.getID(), ": Unsupported request method " + request.method);
+    printLog(connection.getID(), ": Unsupported request method " + request.method);
     return;
   }
 
-  printLog(client.getID(),
+  printLog(connection.getID(),
            ": \"" + request.start_line + "\" from ",
-           client.getIP(),
+           connection.getIP(),
            " @ " + getTime().append("\0"));
 
   std::cout << "received client request is:\n" << req_msg << std ::endl;
@@ -79,54 +81,71 @@ void Proxy::handle(Client_Info info) {
     server_fd = build_client(host, port);  //connect to server
   }
   catch (std::exception & e) {
-    printLog(client.getID(), std::string(": NOTE ") + e.what());
+    printLog(connection.getID(), std::string(": NOTE ") + e.what());
     return;
   }
 
   if (request.method == "CONNECT") {  // handle connect request
-    handleConnect(client, server_fd, request);
+    handleConnect(connection, server_fd, request);
   }
 
   else if (request.method == "GET") {  //handle get request
-    int id = client.getID();           // thread id for logging
+    int id = connection.getID();       // thread id for logging
     std::unordered_map<std::string, Response>::iterator it = cache.begin();
     it = cache.find(request.start_line);
     if (it == cache.end()) {  // request not found in cache
-      printLog(client.getID(), ": not in cache");
-      sendReqAndHandleResp(
-          id, request.start_line, req_msg, len, client.getFD(), server_fd, host);
+      printLog(connection.getID(), ": not in cache");
+      sendReqAndHandleResp(id,
+                           request.start_line,
+                           req_msg,
+                           len,
+                           connection.getClientFD(),
+                           server_fd,
+                           host);
     }
     else {  //request found in cache
       if (request.no_cache ||
           it->second.no_cache) {  //has no-cache symbol, revalidate all the time
-        printLog(client.getID(), ": in cache, requires validation cuz no-cache");
+        printLog(connection.getID(), ": in cache, requires validation");
 
         if (revalidate(it->second, request.raw_content, server_fd, id) ==
             false) {  //check Etag and Last Modified
-          sendReqAndHandleResp(
-              id, request.start_line, req_msg, len, client.getFD(), server_fd, host);
+          sendReqAndHandleResp(id,
+                               request.start_line,
+                               req_msg,
+                               len,
+                               connection.getClientFD(),
+                               server_fd,
+                               host);
         }
         else {
-          sendCachedResp(it->second, id, client.getFD());
+          sendCachedResp(it->second, id, connection.getClientFD());
         }
       }
       else {
-        bool valid = checkNotExpired(
-            server_fd, request, request.start_line, it->second, client.getID());
-
-        if (!valid) {  //ask for server,check res and put in cache if needed
-          sendReqAndHandleResp(
-              id, request.start_line, req_msg, len, client.getFD(), server_fd, host);
+        if (!checkNotExpired(server_fd,
+                             request,
+                             it->second,
+                             connection.getID())) {  // expired, or must-revalidate filed
+          sendReqAndHandleResp(id,
+                               request.start_line,
+                               req_msg,
+                               len,
+                               connection.getClientFD(),
+                               server_fd,
+                               host);
         }
-        else {  //send from cache
-          sendCachedResp(it->second, id, client.getFD());
+        else {  //not expired, or revalidated, send from cache
+          sendCachedResp(it->second, id, connection.getClientFD());
         }
       }
     }
   }
   else if (request.method == "POST") {  //handle post request
-    printLog(client.getID(), ": Requesting \"" + request.start_line + "\" from " + host);
-    handlePOST(client.getFD(), server_fd, req_msg, len, client.getID(), host);
+    printLog(connection.getID(),
+             ": Requesting \"" + request.start_line + "\" from " + host);
+    handlePOST(
+        connection.getClientFD(), server_fd, req_msg, len, connection.getID(), host);
   }
   close(server_fd);
   return;
@@ -172,7 +191,7 @@ bool Proxy::compareExpiration(int expiration_time,
   curr_time += 5 * 60 * 60;
   if (expiration_time <= curr_time) {  // stale
     if (rep.must_revalidate) {         // validation required
-      printLog(id, ": in cache, requires validation cuz must-validate");
+      printLog(id, ": in cache, requires validation");
       return revalidate(rep, request.raw_content, server_fd, id);
     }
     cache.erase(request.start_line);
@@ -189,11 +208,7 @@ bool Proxy::compareExpiration(int expiration_time,
  * Check if the cached resposne expires
  * @return false if expires or revalidate failed(new request), true use cache
  */
-bool Proxy::checkNotExpired(int server_fd,
-                            Request & request,
-                            std::string req_start_line,
-                            Response & rep,
-                            int id) {
+bool Proxy::checkNotExpired(int server_fd, Request & request, Response & rep, int id) {
   if (rep.max_age != -1) {
     time_t rep_time = mktime(rep.response_time.getTimeStruct());
     int max_age = rep.max_age;
@@ -495,24 +510,25 @@ int Proxy::getLength(char * server_msg, int mes_len) {
   return -1;
 }
 
-void Proxy::handleConnect(Client & client, int server_fd, Request & request) {
-  printLog(client.getID(),
+void Proxy::handleConnect(Connection & connection, int server_fd, Request & request) {
+  printLog(connection.getID(),
            ": Requesting \"" + request.start_line + "\" from " + request.host);
 
-  int id = client.getID();
-  send(client.getFD(), "HTTP/1.1 200 OK\r\n\r\n", 19, 0);
+  int id = connection.getID();
+  send(connection.getClientFD(), "HTTP/1.1 200 OK\r\n\r\n", 19, 0);
   printLog(id, ": Responding \"HTTP/1.1 200 OK\"");
 
   fd_set readfds;
-  int nfds = server_fd > client.getFD() ? server_fd + 1 : client.getFD() + 1;
+  int nfds =
+      server_fd > connection.getClientFD() ? server_fd + 1 : connection.getClientFD() + 1;
 
   while (1) {
     FD_ZERO(&readfds);
     FD_SET(server_fd, &readfds);
-    FD_SET(client.getFD(), &readfds);
+    FD_SET(connection.getClientFD(), &readfds);
 
     select(nfds, &readfds, NULL, NULL, NULL);
-    int fd[2] = {server_fd, client.getFD()};
+    int fd[2] = {server_fd, connection.getClientFD()};
     for (int i = 0; i < 2; i++) {
       char buffer[65536] = {0};
       if (FD_ISSET(fd[i], &readfds)) {
@@ -522,7 +538,7 @@ void Proxy::handleConnect(Client & client, int server_fd, Request & request) {
       }
     }
   }
-  printLog(client.getID(), ": Tunnel closed");
+  printLog(connection.getID(), ": Tunnel closed");
 }
 
 std::string Proxy::getTime() {

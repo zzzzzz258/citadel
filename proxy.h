@@ -6,7 +6,7 @@
 #include <thread>
 #include <unordered_map>
 
-#include "client.h"
+#include "connection.h"
 #include "pthread.h"
 #include "request.h"
 #include "response.h"
@@ -25,7 +25,7 @@ class Proxy {
   {}
   void run();
   static void handle(Client_Info info);
-  static void handleConnect(Client & client, int server_fd, Request & request);
+  static void handleConnect(Connection & connection, int server_fd, Request & request);
   static void handleGet(int client_fd,
                         int server_fd,
                         int id,
@@ -44,11 +44,7 @@ class Proxy {
   static int getLength(char * server_msg, int mes_len);
   static bool findChunk(char * server_msg, int mes_len);
   static std::string getTime();
-  static bool checkNotExpired(int server_fd,
-                              Request & parser,
-                              std::string req_line,
-                              Response & rep,
-                              int id);
+  static bool checkNotExpired(int server_fd, Request & parser, Response & rep, int id);
   static void printcache();
   static void printcachelog(Response & parse_res,
                             bool no_store,
