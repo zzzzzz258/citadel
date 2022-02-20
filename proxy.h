@@ -9,6 +9,7 @@
 #include "pthread.h"
 #include "request.h"
 #include "response.h"
+#include "client_info.h"
 class Proxy {
  private:
   const char * port_num;
@@ -23,7 +24,7 @@ class Proxy {
   //mutex(PTHREAD_MUTEX_INITIALIZER)
   {}
   void run();
-  static void * handle(void * arg);
+  static void handle(Client_Info info);
   static void handleConnect(int client_fd, int server_fd, int id);
   static void handleGet(int client_fd,
                         int server_fd,

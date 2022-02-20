@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <unistd.h>
 
 /**
  * Store basic information of connected client
@@ -16,6 +17,7 @@ class Client_Info {
 
  public:
   Client_Info(int _id, int _fd, std::string & _ip) : id(_id), client_fd(_fd), ip(_ip) {}
+
   void setFd(int my_client_fd) { client_fd = my_client_fd; }
   int getFd() { return client_fd; }
   void setIP(std::string myip) { ip = myip; }

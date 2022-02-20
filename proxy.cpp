@@ -14,7 +14,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "client_info.h"
 #include "function.h"
 
 std::mutex mtx_log;
@@ -40,20 +39,23 @@ void Proxy::run() {
       printLog(-1, "(no-id): ERROR in connecting client");
       continue;
     }
-    Client_Info * client_info = new Client_Info(id, client_fd, ip);
+    Client_Info client_info = Client_Info(id, client_fd, ip);
     id++;
-    std::thread(handle, client_info).detach();
+    std::thread(handle, std::ref(client_info)).detach();
   }
 }
 
-void * Proxy::handle(void * info) {
-  Client_Info * client_info = (Client_Info *)info;
+/**
+ * @param info is a passenger of information about client
+ */
+void Proxy::handle(Client_Info info) {
+  Client_Info * client_info = &info;
   int client_fd = client_info->getFd();
   char req_msg[65536] = {0};
   int len = recv(client_fd, req_msg, sizeof(req_msg), 0);  // fisrt request from client
   if (len <= 2) {
     printLog(client_info->getID(), ": WARNING Invalid Request");
-    return NULL;
+    return;
   }
   std::string input = std::string(req_msg, len);
   Request * request = new Request(input);
@@ -61,7 +63,7 @@ void * Proxy::handle(void * info) {
       request->method != "CONNECT") {  // just shut connect for unsupported methods
     printLog(client_info->getID(), ": Unsupported request method " + request->method);
     close(client_fd);
-    return NULL;
+    return;
   }
   //newly added, need test
   printLog(client_info->getID(),
@@ -80,7 +82,7 @@ void * Proxy::handle(void * info) {
   catch (std::exception & e) {
     printLog(client_info->getID(), std::string(": NOTE ") + e.what());
     close(client_fd);
-    return NULL;
+    return;
   }
   printLog(client_info->getID(), ": NOTE Connect to server successfully");
   if (request->method == "CONNECT") {  // handle connect request
@@ -134,7 +136,7 @@ void * Proxy::handle(void * info) {
   }
   close(server_fd);
   close(client_fd);
-  return NULL;
+  return;
 }
 
 /**
