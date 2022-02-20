@@ -122,8 +122,7 @@ void Proxy::handle(Client_Info info) {
   else if (request.method == "POST") {  //handle post request
     printLog(connection.getID(),
              ": Requesting \"" + request.start_line + "\" from " + host);
-    handlePOST(
-        connection.getClientFD(), server_fd, req_msg, len, connection.getID(), host);
+    handlePOST(connection, request, req_msg, len);
   }
   return;
 }
@@ -246,35 +245,35 @@ bool Proxy::revalidate(Response & rep, std::string raw_content, const Connection
 /**
  * A handler of Post request
  */
-void Proxy::handlePOST(int client_fd,
-                       int server_fd,
+void Proxy::handlePOST(Connection & connection,
+                       const Request & request,
                        char * req_msg,
-                       int len,
-                       int id,
-                       const char * host) {
+                       int len) {
   int post_len = getLength(req_msg, len);  //get length of client request
   if (post_len != -1) {
-    std::string request = sendContentLen(client_fd, req_msg, len, post_len);
-    char send_request[request.length() + 1];
-    strcpy(send_request, request.c_str());
-    send(server_fd,
+    std::string full_request =
+        sendContentLen(connection.getClientFD(), req_msg, len, post_len);
+    char send_request[full_request.length() + 1];
+    strcpy(send_request, full_request.c_str());
+    send(connection.getServerFD(),
          send_request,
          sizeof(send_request),
          MSG_NOSIGNAL);  // send all the request info from client to server
     char response[65536] = {0};
-    int response_len = recv(server_fd,
+    int response_len = recv(connection.getServerFD(),
                             response,
                             sizeof(response),
                             MSG_WAITALL);  //first time received response from server
     if (response_len != 0) {
       Response res;
       res.parseStartLine(req_msg, len);
-      printLog(id, ": Received \"" + res.getStartLine() + "\" from " + host);
+      printLog(connection.getID(),
+               ": Received \"" + res.getStartLine() + "\" from " + request.host);
 
       std::cout << "receive response from server which is:" << response << std::endl;
 
-      send(client_fd, response, response_len, MSG_NOSIGNAL);
-      printLog(id, ": Responding \"" + res.getStartLine());
+      send(connection.getClientFD(), response, response_len, MSG_NOSIGNAL);
+      printLog(connection.getID(), ": Responding \"" + res.getStartLine());
     }
     else {
       std::cout << "server socket closed!\n";

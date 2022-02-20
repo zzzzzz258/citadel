@@ -27,12 +27,10 @@ class Proxy {
   static void handle(Client_Info info);
   static void handleConnect(Connection & connection, int server_fd, Request & request);
   static void handleGet(Connection & connection, const Request & request);
-  static void handlePOST(int client_fd,
-                         int server_fd,
+  static void handlePOST(Connection & connection,
+                         const Request & request,
                          char * req_msg,
-                         int len,
-                         int id,
-                         const char * host);
+                         int len);
   static std::string sendContentLen(int send_fd,
                                     char * server_msg,
                                     int mes_len,
