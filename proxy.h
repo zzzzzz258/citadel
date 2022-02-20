@@ -26,11 +26,7 @@ class Proxy {
   void run();
   static void handle(Client_Info info);
   static void handleConnect(Connection & connection, int server_fd, Request & request);
-  static void handleGet(int client_fd,
-                        int server_fd,
-                        int id,
-                        const char * host,
-                        std::string req_line);
+  static void handleGet(Connection & connection, const Request & request);
   static void handlePOST(int client_fd,
                          int server_fd,
                          char * req_msg,
@@ -51,13 +47,10 @@ class Proxy {
                             std::string req_line,
                             int id);
   static void printnote(Response & parse_res, int id);
-  static void sendReqAndHandleResp(int id,
-                                   std::string line,
+  static void sendReqAndHandleResp(Connection & connection,
+                                   const Request & request,
                                    char * req_msg,
-                                   int len,
-                                   int client_fd,
-                                   int server_fd,
-                                   const char * host);
+                                   int len);
   static bool passMessage(int server_fd,
                           int client_fd,
                           char * buffer,

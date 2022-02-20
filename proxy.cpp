@@ -96,48 +96,26 @@ void Proxy::handle(Client_Info info) {
     it = cache.find(request.start_line);
     if (it == cache.end()) {  // request not found in cache
       printLog(connection.getID(), ": not in cache");
-      sendReqAndHandleResp(id,
-                           request.start_line,
-                           req_msg,
-                           len,
-                           connection.getClientFD(),
-                           server_fd,
-                           host);
+      sendReqAndHandleResp(connection, request, req_msg, len);
     }
     else {  //request found in cache
-      if (request.no_cache ||
-          it->second.no_cache) {  //has no-cache symbol, revalidate all the time
+      if (request.no_cache || it->second.no_cache) {
         printLog(connection.getID(), ": in cache, requires validation");
 
-        if (revalidate(it->second, request.raw_content, connection) ==
-            false) {  //check Etag and Last Modified
-          sendReqAndHandleResp(id,
-                               request.start_line,
-                               req_msg,
-                               len,
-                               connection.getClientFD(),
-                               server_fd,
-                               host);
-        }
+        if (revalidate(it->second, request.raw_content, connection) == false) {
+          sendReqAndHandleResp(connection, request, req_msg, len);
+        }  //check Etag and Last Modified
         else {
           sendCachedResp(it->second, id, connection.getClientFD());
         }
-      }
+      }  //has no-cache symbol, revalidate all the time
       else {
-        if (!checkNotExpired(connection,
-                             request,
-                             it->second)) {  // expired, or must-revalidate filed
-          sendReqAndHandleResp(id,
-                               request.start_line,
-                               req_msg,
-                               len,
-                               connection.getClientFD(),
-                               server_fd,
-                               host);
-        }
-        else {  //not expired, or revalidated, send from cache
+        if (!checkNotExpired(connection, request, it->second)) {
+          sendReqAndHandleResp(connection, request, req_msg, len);
+        }  // expired, or must-revalidate filed
+        else {
           sendCachedResp(it->second, id, connection.getClientFD());
-        }
+        }  //not expired, or revalidated, send from cache
       }
     }
   }
@@ -153,16 +131,16 @@ void Proxy::handle(Client_Info info) {
 /**
  * Send request message to server, and handle its response
  */
-void Proxy::sendReqAndHandleResp(int id,
-                                 std::string start_line,
+void Proxy::sendReqAndHandleResp(Connection & connection,
+                                 const Request & request,
                                  char * req_msg,
-                                 int len,
-                                 int client_fd,
-                                 int server_fd,
-                                 const char * host) {
-  printLog(id, ": Requesting \"" + start_line + "\" from " + std::string(host));
-  send(server_fd, req_msg, len, 0);
-  handleGet(client_fd, server_fd, id, host, start_line);
+                                 int len) {
+  printLog(
+      connection.getID(),
+      ": Requesting \"" + request.start_line + "\" from " + std::string(request.host));
+  send(connection.getServerFD(), req_msg, len, 0);
+  handleGet(connection, request);
+  //handleGet(client_fd, server_fd, id, host, start_line);
 }
 
 /**
@@ -320,13 +298,9 @@ bool Proxy::passMessage(int server_fd, int client_fd, char * buffer, size_t buff
   return true;
 }
 
-void Proxy::handleGet(int client_fd,
-                      int server_fd,
-                      int id,
-                      const char * host,
-                      std::string req_start_line) {
+void Proxy::handleGet(Connection & connection, const Request & request) {
   char server_msg[65536] = {0};
-  int mes_len = recv(server_fd,
+  int mes_len = recv(connection.getServerFD(),
                      server_msg,
                      sizeof(server_msg),
                      0);  //received first response from server(all header, part body)
@@ -341,16 +315,23 @@ void Proxy::handleGet(int client_fd,
   response.parseStartLine(server_msg,
                           mes_len);  // parse and get the first start_line
   response.setRawContent(std::string(server_msg, mes_len));
-  printLog(id, ": Received \"" + response.getStartLine() + "\" from " + host);
+  printLog(connection.getID(),
+           ": Received \"" + response.getStartLine() + "\" from " + request.host);
 
   bool is_chunk = findChunk(server_msg, mes_len);
   if (is_chunk) {  // chunked response, no cache, just resend
-    printLog(id, ": not cacheable because it is chunked");
+    printLog(connection.getID(), ": not cacheable because it is chunked");
 
-    send(client_fd, server_msg, mes_len, 0);  //send first response to server
+    send(connection.getClientFD(),
+         server_msg,
+         mes_len,
+         0);  //send first response to server
     char chunked_msg[28000] = {0};
     while (1) {  //receive and send remaining message
-      if (!passMessage(server_fd, client_fd, chunked_msg, sizeof(chunked_msg))) {
+      if (!passMessage(connection.getServerFD(),
+                       connection.getClientFD(),
+                       chunked_msg,
+                       sizeof(chunked_msg))) {
         std::cout << "chunked break" << std::endl;
         break;
       }
@@ -365,11 +346,13 @@ void Proxy::handleGet(int client_fd,
       no_store = true;
     }
     response.parseField(server_msg, mes_len);          // fill attributes of response
-    printnote(response, id);                           // print cache related note
+    printnote(response, connection.getID());           // print cache related note
     int content_len = getLength(server_msg, mes_len);  //get content length
     if (content_len != -1) {                           // content_len specified
-      std::string msg = sendContentLen(
-          server_fd, server_msg, mes_len, content_len);  //get the entire message
+      std::string msg = sendContentLen(connection.getServerFD(),
+                                       server_msg,
+                                       mes_len,
+                                       content_len);  //get the entire message
       // send response to client
       std::vector<char> large_msg;
       for (size_t i = 0; i < msg.length(); i++) {
@@ -377,14 +360,14 @@ void Proxy::handleGet(int client_fd,
       }
       const char * send_msg = large_msg.data();
       response.setRawContent(large_msg);
-      send(client_fd, send_msg, msg.length(), 0);
+      send(connection.getClientFD(), send_msg, msg.length(), 0);
     }
     else {  // content-length not specified, take it as whole message has been received
       std::string server_msg_str(server_msg, mes_len);
       response.setRawContent(server_msg_str);
-      send(client_fd, server_msg, mes_len, 0);
+      send(connection.getClientFD(), server_msg, mes_len, 0);
     }
-    printcachelog(response, no_store, req_start_line, id);
+    printcachelog(response, no_store, request.start_line, connection.getID());
   }
   // print messages
   std::cout << "Responding for GET\n";
@@ -394,7 +377,7 @@ void Proxy::handleGet(int client_fd,
   //problem remaining
   std::string log_start_line = logrespond.substr(0, log_pos);
   std::cout << "logfile responding\n";
-  printLog(id, ": Responding \"" + log_start_line + "\"");
+  printLog(connection.getID(), ": Responding \"" + log_start_line + "\"");
 }
 
 void Proxy::Check502(std::string entire_msg, int client_fd, int id) {
