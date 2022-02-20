@@ -15,7 +15,8 @@
 #include "client_info.h"
 #include "function.h"
 
-std::mutex mtx;
+std::mutex mtx_log;
+std::mutex mtx_cache;
 std::ofstream logFile("proxy.log");
 
 std::unordered_map<std::string, Response> cache;
@@ -23,7 +24,6 @@ std::unordered_map<std::string, Response> cache;
 void Proxy::run() {
   int temp_fd = build_server(this->port_num);
   if (temp_fd == -1) {
-    //
     printLog(-1, "(no-id): ERROR in creating socket to accept");
     return;
   }
@@ -33,7 +33,6 @@ void Proxy::run() {
     std::string ip;
     client_fd = server_accept(temp_fd, &ip);
     if (client_fd == -1) {
-      //
       printLog(-1, "(no-id): ERROR in connecting client");
       continue;
     }
@@ -50,7 +49,6 @@ void * Proxy::handle(void * info) {
   char req_msg[65536] = {0};
   int len = recv(client_fd, req_msg, sizeof(req_msg), 0);  // fisrt request from client
   if (len <= 0) {
-    //
     printLog(client_info->getID(), ": WARNING Invalid Request");
     return NULL;
   }
@@ -63,7 +61,6 @@ void * Proxy::handle(void * info) {
 
   if (request->method != "POST" && request->method != "GET" &&
       request->method != "CONNECT") {
-    //
     printLog(client_info->getID(), ": Unsupported request method " + request->method);
 
     close(client_fd);
@@ -86,11 +83,9 @@ void * Proxy::handle(void * info) {
   }
 
   if (request->method == "CONNECT") {  // handle connect request
-    //
     printLog(client_info->getID(),
              ": Requesting \"" + request->start_line + "\" from " + host);
     handleConnect(client_fd, server_fd, client_info->getID());
-    //
     printLog(client_info->getID(), ": Tunnel closed");
   }
 
@@ -99,9 +94,7 @@ void * Proxy::handle(void * info) {
     std::unordered_map<std::string, Response>::iterator it = cache.begin();
     it = cache.find(request->start_line);
     if (it == cache.end()) {  // request not found in cache
-      //
       printLog(client_info->getID(), ": not in cache");
-      //
       sendReqAndHandleResp(
           id, request->start_line, req_msg, len, client_fd, server_fd, host);
     }
@@ -170,8 +163,29 @@ void Proxy::sendCachedResp(Response & res, int id, int client_fd) {
     cache_res[i] = *it;
   }
   send(client_fd, cache_res, res.getSize(), 0);
-  //
   printLog(id, ": Requesting \"" + res.start_line + "\"");
+}
+
+bool Proxy::compareExpiration(int expiration_time,
+                              Response & rep,
+                              int id,
+                              Request & request,
+                              int server_fd) {
+  time_t curr_time;  // this time is in current time zone
+  time(&curr_time);
+  curr_time += 5 * 60 * 60;
+  if (expiration_time <= curr_time) {  // stale
+    if (rep.must_revalidate) {         // validation required
+      printLog(id, ": in cache, requires validation cuz must-validate");
+      return revalidate(rep, request.raw_content, server_fd, id);
+    }
+    cache.erase(request.start_line);
+    time_t dead_time = mktime(rep.expire_time.getTimeStruct());
+    struct tm * asc_time = gmtime(&dead_time);
+    const char * t = asctime(asc_time);
+    printLog(id, ": in cache, but expired at " + std::string(t));
+    return false;
+  }
 }
 
 /**
@@ -184,64 +198,56 @@ bool Proxy::checkNotExpired(int server_fd,
                             Response & rep,
                             int id) {
   if (rep.max_age != -1) {
-    time_t curr_time;  // this time is in current time zone
-    time(&curr_time);
-    curr_time += 5 * 60 * 60;
     time_t rep_time = mktime(rep.response_time.getTimeStruct());
     int max_age = rep.max_age;
-    std::cout << rep_time << " compared with " << curr_time << std::endl;
-    if (rep_time + max_age <= curr_time) {  // stale
-      if (rep.must_revalidate) {            // validation required
-        mtx.lock();
-        logFile << id << ": in cache, requires validation cuz must-validate" << std::endl;
-        mtx.unlock();
-        return revalidate(rep, request.raw_content, server_fd, id);
-      }
-      cache.erase(req_start_line);
-      mtx.lock();
-      time_t dead_time = mktime(rep.expire_time.getTimeStruct());
-      struct tm * asc_time = gmtime(&dead_time);
-      const char * t = asctime(asc_time);
-      //
-      printLog(id, ": in cache, but expired at " + std::string(t));
+    if (!compareExpiration(rep_time + max_age, rep, id, request, server_fd)) {
       return false;
     }
-  }
-  else if (rep.exp_str != "") {
+    /*
     time_t curr_time;  // this time is in current time zone
     time(&curr_time);
     curr_time += 5 * 60 * 60;
-    time_t expire_time = mktime(rep.expire_time.getTimeStruct());
-    if (curr_time >= expire_time) {
-      if (rep.must_revalidate) {  // validation required
-        mtx.lock();
-        logFile << id << ": in cache, requires validation cuz must-validate" << std::endl;
-        mtx.unlock();
+    if (rep_time + max_age <= curr_time) {  // stale
+      if (rep.must_revalidate) {            // validation required
+        printLog(id, ": in cache, requires validation cuz must-validate");
         return revalidate(rep, request.raw_content, server_fd, id);
       }
       cache.erase(req_start_line);
       time_t dead_time = mktime(rep.expire_time.getTimeStruct());
       struct tm * asc_time = gmtime(&dead_time);
       const char * t = asctime(asc_time);
-      //
+      printLog(id, ": in cache, but expired at " + std::string(t));
+      return false;
+      }*/
+  }
+  else if (rep.exp_str != "") {
+    time_t expire_time = mktime(rep.expire_time.getTimeStruct());
+    if (!compareExpiration(expire_time, rep, id, request, server_fd)) {
+      return false;
+    }
+    /*
+    time_t curr_time;  // this time is in current time zone
+    time(&curr_time);
+    curr_time += 5 * 60 * 60;
+      if (curr_time >= expire_time) {
+      if (rep.must_revalidate) {  // validation required
+        printLog(id, ": in cache, requires validation cuz must-validate");
+        return revalidate(rep, request.raw_content, server_fd, id);
+      }
+      cache.erase(req_start_line);
+      time_t dead_time = mktime(rep.expire_time.getTimeStruct());
+      struct tm * asc_time = gmtime(&dead_time);
+      const char * t = asctime(asc_time);
       printLog(id, ": in cache, but expired at " + std::string(t));
 
       return false;
-    }
-  }
-  /*
-  bool revalid = revalidation(rep, request.input, server_fd, id);
-  if (revalid == false) {
-    return false;
-  }
-  */
-  //
-  printLog(id, ": in cache, valid");
-  // no cache-control fields define an expiration time, cache valid
+    }*/
+    printLog(id, ": in cache, valid");
+    // no cache-control fields define an expiration time, cache valid
 
-  return true;
+    return true;
+  }
 }
-
 /**
  * A function to check if revalidate is necessary
  * @return: true if revalidate successfullly, false for new request
@@ -435,18 +441,15 @@ void Proxy::printnote(Response & response, int id) {
     printLog(id, ": NOTE Cache-Control: max-age=" + std::to_string(response.max_age));
   }
   if (response.exp_str != "") {
-    //
     printLog(id, ": NOTE Expires: " + response.exp_str);
   }
   if (response.no_cache == true) {
     printLog(id, "NOTE Cache-Control: no-cache");
   }
   if (response.etag != "") {
-    //
     printLog(id, ": NOTE etag: " + response.etag);
   }
   if (response.lastModified != "") {
-    //
     printLog(id, ": NOTE Last-Modified: " + response.lastModified);
   }
 }
@@ -455,13 +458,11 @@ void Proxy::printcachelog(Response & response,
                           bool no_store,
                           std::string req_start_line,
                           int id) {
-  //
   printLog(id, ": function printcachelog called");
 
   if (response.getRawContentString(100).find("HTTP/1.1 200 OK") !=
       std::string::npos) {  // cacheable response
     if (no_store) {         // no-store specified
-      //
       printLog(id, ": not cacheable because NO STORE");
       return;
     }
@@ -470,24 +471,21 @@ void Proxy::printcachelog(Response & response,
           mktime(response.response_time.getTimeStruct()) + response.max_age;
       struct tm * asc_time = gmtime(&dead_time);
       const char * t = asctime(asc_time);
-      //
       printLog(id, ": cached, expires at " + std::string(t));
     }
     else if (response.exp_str != "") {
-      //
       printLog(id, ": cached, expires at " + response.exp_str);
     }
     // not dealing with the situation that neither max-age nor expired-time is sprcified
     Response storedres(response);
+    mtx_cache.lock();
     if (cache.size() > 10) {
       std::unordered_map<std::string, Response>::iterator it = cache.begin();
       cache.erase(it);
     }
     cache.insert(std::pair<std::string, Response>(req_start_line, storedres));
-    //
-    printLog(id, ": ADD NEW item to cache");
+    mtx_cache.unlock();
   }
-  //
   printLog(
       id,
       ": HTTP/1.1 200 OK not found in response, not cache it" + response.lastModified);
@@ -578,11 +576,12 @@ time_t getCurrentUTCTime() {
   curr_time += 5 * 60 * 60;
   return curr_time;
 }
+
 void Proxy::printLog(int id,
                      std::string content_1,
                      std::string ip,
                      std::string content_2) {
-  mtx.lock();
+  mtx_log.lock();
   if (id == -1) {
     logFile << content_1 << std::endl;
   }
@@ -593,5 +592,5 @@ void Proxy::printLog(int id,
     logFile << id << content_1 << ip << content_2 << std::endl;
   }
 
-  mtx.unlock();
+  mtx_log.unlock();
 }
