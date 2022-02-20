@@ -49,25 +49,22 @@ void Proxy::run() {
  * @param info is a passenger of information about client
  */
 void Proxy::handle(Client_Info info) {
-  //  Client_Info * client_info = &info;
   Client client(info);
-  //int client_fd = client_info->getFD();
   char req_msg[65536] = {0};
-  int len =
-      recv(client.getFD(), req_msg, sizeof(req_msg), 0);  // fisrt request from client
+  int len = recv(
+      client.getFD(), req_msg, sizeof(req_msg), 0);  // receive first request from client
   if (len <= 2) {
     printLog(client.getID(), ": WARNING Invalid Request");
     return;
   }
-  std::string input = std::string(req_msg, len);
-  Request * request = new Request(input);
+
+  Request * request = new Request(std::string(req_msg, len));
   if (request->method != "POST" && request->method != "GET" &&
       request->method != "CONNECT") {  // just shut connect for unsupported methods
     printLog(client.getID(), ": Unsupported request method " + request->method);
-    //close(client_fd);
     return;
   }
-  //newly added, need test
+
   printLog(client.getID(),
            ": \"" + request->start_line + "\" from ",
            client.getIP(),
@@ -83,13 +80,12 @@ void Proxy::handle(Client_Info info) {
   }
   catch (std::exception & e) {
     printLog(client.getID(), std::string(": NOTE ") + e.what());
-    //close(client_fd);
     return;
   }
   printLog(client.getID(), ": NOTE Connect to server successfully");
   if (request->method == "CONNECT") {  // handle connect request
     printLog(client.getID(), ": Requesting \"" + request->start_line + "\" from " + host);
-    handleConnect(client.getFD(), server_fd, client.getID());
+    handleConnect(client, server_fd);
     printLog(client.getID(), ": Tunnel closed");
   }
 
@@ -135,7 +131,6 @@ void Proxy::handle(Client_Info info) {
     handlePOST(client.getFD(), server_fd, req_msg, len, client.getID(), host);
   }
   close(server_fd);
-  //  close(client_fd);
   return;
 }
 
@@ -502,20 +497,21 @@ int Proxy::getLength(char * server_msg, int mes_len) {
   return -1;
 }
 
-void Proxy::handleConnect(int client_fd, int server_fd, int id) {
-  send(client_fd, "HTTP/1.1 200 OK\r\n\r\n", 19, 0);
+void Proxy::handleConnect(Client & client, int server_fd) {
+  int id = client.getID();
+  send(client.getFD(), "HTTP/1.1 200 OK\r\n\r\n", 19, 0);
   printLog(id, ": Responding \"HTTP/1.1 200 OK\"");
 
   fd_set readfds;
-  int nfds = server_fd > client_fd ? server_fd + 1 : client_fd + 1;
+  int nfds = server_fd > client.getFD() ? server_fd + 1 : client.getFD() + 1;
 
   while (1) {
     FD_ZERO(&readfds);
     FD_SET(server_fd, &readfds);
-    FD_SET(client_fd, &readfds);
+    FD_SET(client.getFD(), &readfds);
 
     select(nfds, &readfds, NULL, NULL, NULL);
-    int fd[2] = {server_fd, client_fd};
+    int fd[2] = {server_fd, client.getFD()};
     for (int i = 0; i < 2; i++) {
       char buffer[65536] = {0};
       if (FD_ISSET(fd[i], &readfds)) {

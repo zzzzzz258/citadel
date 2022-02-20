@@ -25,7 +25,7 @@ class Proxy {
   {}
   void run();
   static void handle(Client_Info info);
-  static void handleConnect(int client_fd, int server_fd, int id);
+  static void handleConnect(Client & client, int server_fd);
   static void handleGet(int client_fd,
                         int server_fd,
                         int id,
