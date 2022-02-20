@@ -250,10 +250,11 @@ bool Proxy::revalidate(Response & rep, std::string raw_content, int server_fd, i
     std::cout << "[Verify] received from server failed in checktime" << std::endl;
   }
   std::string checknew(new_resp, new_len);
-  if (checknew.find("HTTP/1.1 200 OK") != std::string::npos) {  //received a new response
-    return false;
+  if (checknew.find("304 Not Modified") != std::string::npos) {  // validate success
+    printLog(id, ": NOTE revalidate successfullly");
+    return true;
   }
-  return true;  //use from cache
+  return false; 
 }
 
 /**
