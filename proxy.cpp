@@ -120,8 +120,6 @@ void Proxy::handle(Client_Info info) {
     }
   }
   else if (request.method == "POST") {  //handle post request
-    printLog(connection.getID(),
-             ": Requesting \"" + request.start_line + "\" from " + host);
     handlePOST(connection, request, req_msg, len);
   }
   return;
@@ -138,8 +136,7 @@ void Proxy::sendReqAndHandleResp(Connection & connection,
       connection.getID(),
       ": Requesting \"" + request.start_line + "\" from " + std::string(request.host));
   send(connection.getServerFD(), req_msg, len, 0);
-  handleGet(connection, request);
-  //handleGet(client_fd, server_fd, id, host, start_line);
+  handleGetResp(connection, request);
 }
 
 /**
@@ -249,6 +246,8 @@ void Proxy::handlePOST(Connection & connection,
                        const Request & request,
                        char * req_msg,
                        int len) {
+  printLog(connection.getID(),
+           ": Requesting \"" + request.start_line + "\" from " + request.host);
   int post_len = getLength(req_msg, len);  //get length of client request
   if (post_len != -1) {
     std::string full_request =
@@ -297,7 +296,7 @@ bool Proxy::passMessage(int server_fd, int client_fd, char * buffer, size_t buff
   return true;
 }
 
-void Proxy::handleGet(Connection & connection, const Request & request) {
+void Proxy::handleGetResp(Connection & connection, const Request & request) {
   char server_msg[65536] = {0};
   int mes_len = recv(connection.getServerFD(),
                      server_msg,
@@ -316,9 +315,8 @@ void Proxy::handleGet(Connection & connection, const Request & request) {
   response.setRawContent(std::string(server_msg, mes_len));
   printLog(connection.getID(),
            ": Received \"" + response.getStartLine() + "\" from " + request.host);
-
-  bool is_chunk = findChunk(server_msg, mes_len);
-  if (is_chunk) {  // chunked response, no cache, just resend
+  response.parseChunk();
+  if (response.chunked) {  // chunked response, no cache, just resend
     printLog(connection.getID(), ": not cacheable because it is chunked");
 
     send(connection.getClientFD(),
@@ -369,14 +367,14 @@ void Proxy::handleGet(Connection & connection, const Request & request) {
     printcachelog(response, no_store, request.start_line, connection.getID());
   }
   // print messages
-  std::cout << "Responding for GET\n";
-  std::string logrespond(server_msg, mes_len);
-  size_t log_pos = logrespond.find_first_of("\r\n");
+  //std::cout << "Responding for GET\n";
+  //std::string logrespond(server_msg, mes_len);
+  //size_t log_pos = logrespond.find_first_of("\r\n");
 
   //problem remaining
-  std::string log_start_line = logrespond.substr(0, log_pos);
-  std::cout << "logfile responding\n";
-  printLog(connection.getID(), ": Responding \"" + log_start_line + "\"");
+  //std::string log_start_line = logrespond.substr(0, log_pos);
+  //std::cout << "logfile responding\n";
+  printLog(connection.getID(), ": Responding \"" + response.start_line + "\"");
 }
 
 void Proxy::Check502(std::string entire_msg, int client_fd, int id) {
@@ -461,15 +459,6 @@ std::string Proxy::sendContentLen(int send_fd,
     total_len += len;
   }
   return msg;
-}
-
-bool Proxy::findChunk(char * server_msg, int mes_len) {
-  std::string msg(server_msg, mes_len);
-  size_t pos;
-  if ((pos = msg.find("chunked")) != std::string::npos) {
-    return true;
-  }
-  return false;
 }
 
 int Proxy::getLength(char * server_msg, int mes_len) {

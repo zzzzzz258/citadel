@@ -26,7 +26,7 @@ class Proxy {
   void run();
   static void handle(Client_Info info);
   static void handleConnect(Connection & connection, int server_fd, Request & request);
-  static void handleGet(Connection & connection, const Request & request);
+  static void handleGetResp(Connection & connection, const Request & request);
   static void handlePOST(Connection & connection,
                          const Request & request,
                          char * req_msg,
@@ -36,7 +36,6 @@ class Proxy {
                                     int mes_len,
                                     int content_len);
   static int getLength(char * server_msg, int mes_len);
-  static bool findChunk(char * server_msg, int mes_len);
   static std::string getTime();
   static bool checkNotExpired(Connection & c, Request & parser, Response & rep);
   static void printcache();

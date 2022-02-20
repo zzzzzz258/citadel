@@ -45,8 +45,8 @@ void Response::parseField(char * first_msg, int len) {
   }
   size_t max_age_pos;
   if ((max_age_pos = msg.find("max-age=")) != std::string::npos) {
-    size_t max_age_end_pos = msg.find("\r\n", max_age_pos+9);
-    std::string max_age_str = msg.substr(max_age_pos+9, max_age_end_pos);
+    size_t max_age_end_pos = msg.find("\r\n", max_age_pos + 9);
+    std::string max_age_str = msg.substr(max_age_pos + 9, max_age_end_pos);
     max_age = atoi(max_age_str.c_str());
     std::cout << "\n\nmax-age: " << max_age_str << ", int: " << max_age << std::endl;
   }
@@ -76,4 +76,13 @@ void Response::parseField(char * first_msg, int len) {
     lastModified =
         msg.substr(lastmodified_pos + 15, lastmodified_end - lastmodified_pos - 15);
   }
+}
+
+void Response::parseChunk() {
+  std::string msg = std::string(raw_content.begin(), raw_content.end());
+  size_t pos;
+  if ((pos = msg.find("chunked")) != std::string::npos) {
+    chunked = true;
+  }
+  chunked = false;
 }
