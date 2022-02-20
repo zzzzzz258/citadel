@@ -384,6 +384,9 @@ void Proxy::printnote(Response & response, int id) {
   if (response.no_store == true) {
     printLog(id, "NOTE Cache-Control: no-store");
   }
+  if (response.must_revalidate == true) {
+    printLog(id, "NOTE Cache-Control: must-revalidate");
+  }
   if (response.etag != "") {
     printLog(id, ": NOTE etag: " + response.etag);
   }

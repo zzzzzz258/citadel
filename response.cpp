@@ -64,7 +64,7 @@ void Response::parseField(char * first_msg, int len) {
   }
   size_t mustrevalidate_pos;
   if ((mustrevalidate_pos = msg.find("must-revalidate")) != std::string::npos) {
-    no_cache = true;
+    must_revalidate = true;
   }
 
   size_t etag_pos;

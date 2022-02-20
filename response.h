@@ -32,6 +32,7 @@ class Response {
       chunked(false),
       no_store(false),
       no_cache(false),
+      must_revalidate(false),
       etag(""),
       lastModified("") {}
   std::string getStartLine() { return start_line; }
