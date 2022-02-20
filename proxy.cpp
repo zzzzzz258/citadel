@@ -5,9 +5,11 @@
 #include <string.h>
 
 #include <ctime>
+#include <exception>
 #include <fstream>
 #include <map>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -31,8 +33,10 @@ void Proxy::run() {
   int id = 0;
   while (1) {
     std::string ip;
-    client_fd = server_accept(temp_fd, &ip);
-    if (client_fd == -1) {
+    try {
+      client_fd = server_accept(temp_fd, ip);
+    }
+    catch (std::exception & e) {
       printLog(-1, "(no-id): ERROR in connecting client");
       continue;
     }
@@ -45,24 +49,17 @@ void Proxy::run() {
 void * Proxy::handle(void * info) {
   Client_Info * client_info = (Client_Info *)info;
   int client_fd = client_info->getFd();
-
   char req_msg[65536] = {0};
   int len = recv(client_fd, req_msg, sizeof(req_msg), 0);  // fisrt request from client
-  if (len <= 0) {
+  if (len <= 2) {
     printLog(client_info->getID(), ": WARNING Invalid Request");
     return NULL;
   }
   std::string input = std::string(req_msg, len);
-  if (input == "" || input == "\r" || input == "\n" || input == "\r\n") {
-    return NULL;
-  }
-
   Request * request = new Request(input);
-
   if (request->method != "POST" && request->method != "GET" &&
-      request->method != "CONNECT") {
+      request->method != "CONNECT") {  // just shut connect for unsupported methods
     printLog(client_info->getID(), ": Unsupported request method " + request->method);
-
     close(client_fd);
     return NULL;
   }
@@ -72,16 +69,20 @@ void * Proxy::handle(void * info) {
            client_info->getIP(),
            " @ " + getTime().append("\0"));
 
-  std::cout << "received client request is:" << req_msg << "end" << std ::endl;
+  std::cout << "received client request is:\n" << req_msg << std ::endl;
   const char * host = request->host.c_str();
   const char * port = request->port.c_str();
   std::cout << host << ":" << port << std::endl;
-  int server_fd = build_client(host, port);  //connect to server
-  if (server_fd == -1) {
-    std::cout << "Error in build client!\n";
+  int server_fd;
+  try {
+    server_fd = build_client(host, port);  //connect to server
+  }
+  catch (std::exception & e) {
+    printLog(client_info->getID(), std::string(": NOTE ") + e.what());
+    close(client_fd);
     return NULL;
   }
-
+  printLog(client_info->getID(), ": NOTE Connect to server successfully");
   if (request->method == "CONNECT") {  // handle connect request
     printLog(client_info->getID(),
              ": Requesting \"" + request->start_line + "\" from " + host);
@@ -204,51 +205,17 @@ bool Proxy::checkNotExpired(int server_fd,
     if (!compareExpiration(rep_time + max_age, rep, id, request, server_fd)) {
       return false;
     }
-    /*
-    time_t curr_time;  // this time is in current time zone
-    time(&curr_time);
-    curr_time += 5 * 60 * 60;
-    if (rep_time + max_age <= curr_time) {  // stale
-      if (rep.must_revalidate) {            // validation required
-        printLog(id, ": in cache, requires validation cuz must-validate");
-        return revalidate(rep, request.raw_content, server_fd, id);
-      }
-      cache.erase(req_start_line);
-      time_t dead_time = mktime(rep.expire_time.getTimeStruct());
-      struct tm * asc_time = gmtime(&dead_time);
-      const char * t = asctime(asc_time);
-      printLog(id, ": in cache, but expired at " + std::string(t));
-      return false;
-      }*/
   }
   else if (rep.exp_str != "") {
     time_t expire_time = mktime(rep.expire_time.getTimeStruct());
     if (!compareExpiration(expire_time, rep, id, request, server_fd)) {
       return false;
     }
-    /*
-    time_t curr_time;  // this time is in current time zone
-    time(&curr_time);
-    curr_time += 5 * 60 * 60;
-      if (curr_time >= expire_time) {
-      if (rep.must_revalidate) {  // validation required
-        printLog(id, ": in cache, requires validation cuz must-validate");
-        return revalidate(rep, request.raw_content, server_fd, id);
-      }
-      cache.erase(req_start_line);
-      time_t dead_time = mktime(rep.expire_time.getTimeStruct());
-      struct tm * asc_time = gmtime(&dead_time);
-      const char * t = asctime(asc_time);
-      printLog(id, ": in cache, but expired at " + std::string(t));
-
-      return false;
-    }*/
   }
-    printLog(id, ": in cache, valid");
-    // no cache-control fields define an expiration time, cache valid
+  printLog(id, ": in cache, valid");
+  // no cache-control fields define an expiration time, cache valid
 
-    return true;
-  
+  return true;
 }
 /**
  * A function to check if revalidate is necessary
@@ -315,13 +282,11 @@ void Proxy::handlePOST(int client_fd,
     if (response_len != 0) {
       Response res;
       res.parseStartLine(req_msg, len);
-      //
       printLog(id, ": Received \"" + res.getStartLine() + "\" from " + host);
 
       std::cout << "receive response from server which is:" << response << std::endl;
 
       send(client_fd, response, response_len, MSG_NOSIGNAL);
-      //
       printLog(id, ": Responding \"" + res.getStartLine());
     }
     else {
@@ -367,13 +332,10 @@ void Proxy::handleGet(int client_fd,
   response.parseStartLine(server_msg,
                           mes_len);  // parse and get the first start_line
   response.setRawContent(std::string(server_msg, mes_len));
-
-  //
   printLog(id, ": Received \"" + response.getStartLine() + "\" from " + host);
 
   bool is_chunk = findChunk(server_msg, mes_len);
   if (is_chunk) {  // chunked response, no cache, just resend
-    //
     printLog(id, ": not cacheable because it is chunked");
 
     send(client_fd, server_msg, mes_len, 0);  //send first response to server
@@ -422,9 +384,7 @@ void Proxy::handleGet(int client_fd,
 
   //problem remaining
   std::string log_start_line = logrespond.substr(0, log_pos);
-  //
   std::cout << "logfile responding\n";
-  //
   printLog(id, ": Responding \"" + log_start_line + "\"");
 }
 
@@ -432,7 +392,6 @@ void Proxy::Check502(std::string entire_msg, int client_fd, int id) {
   if (entire_msg.find("\r\n\r\n") == std::string::npos) {
     const char * bad502 = "HTTP/1.1 502 Bad Gateway";
     send(client_fd, bad502, sizeof(bad502), 0);
-    //
     printLog(id, ": Responding \"HTTP/1.1 502 Bad Gateway\"");
   }
 }
