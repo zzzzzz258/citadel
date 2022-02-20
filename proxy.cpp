@@ -79,6 +79,7 @@ void Proxy::handle(Client_Info info) {
   int server_fd;
   try {
     server_fd = build_client(host, port);  //connect to server
+    connection.setServerFD(server_fd);
   }
   catch (std::exception & e) {
     printLog(connection.getID(), std::string(": NOTE ") + e.what());
@@ -108,7 +109,7 @@ void Proxy::handle(Client_Info info) {
           it->second.no_cache) {  //has no-cache symbol, revalidate all the time
         printLog(connection.getID(), ": in cache, requires validation");
 
-        if (revalidate(it->second, request.raw_content, server_fd, id) ==
+        if (revalidate(it->second, request.raw_content, connection) ==
             false) {  //check Etag and Last Modified
           sendReqAndHandleResp(id,
                                request.start_line,
@@ -123,10 +124,9 @@ void Proxy::handle(Client_Info info) {
         }
       }
       else {
-        if (!checkNotExpired(server_fd,
+        if (!checkNotExpired(connection,
                              request,
-                             it->second,
-                             connection.getID())) {  // expired, or must-revalidate filed
+                             it->second)) {  // expired, or must-revalidate filed
           sendReqAndHandleResp(id,
                                request.start_line,
                                req_msg,
@@ -147,7 +147,6 @@ void Proxy::handle(Client_Info info) {
     handlePOST(
         connection.getClientFD(), server_fd, req_msg, len, connection.getID(), host);
   }
-  close(server_fd);
   return;
 }
 
@@ -182,23 +181,22 @@ void Proxy::sendCachedResp(Response & res, int id, int client_fd) {
 }
 
 bool Proxy::compareExpiration(int expiration_time,
+                              Connection & con,
                               Response & rep,
-                              int id,
-                              Request & request,
-                              int server_fd) {
+                              Request & request) {
   time_t curr_time;  // this time is in current time zone
   time(&curr_time);
   curr_time += 5 * 60 * 60;
   if (expiration_time <= curr_time) {  // stale
     if (rep.must_revalidate) {         // validation required
-      printLog(id, ": in cache, requires validation");
-      return revalidate(rep, request.raw_content, server_fd, id);
+      printLog(con.getID(), ": in cache, requires validation");
+      return revalidate(rep, request.raw_content, con);
     }
     cache.erase(request.start_line);
     time_t dead_time = mktime(rep.expire_time.getTimeStruct());
     struct tm * asc_time = gmtime(&dead_time);
     const char * t = asctime(asc_time);
-    printLog(id, ": in cache, but expired at " + std::string(t));
+    printLog(con.getID(), ": in cache, but expired at " + std::string(t));
     return false;
   }
   return true;
@@ -208,21 +206,21 @@ bool Proxy::compareExpiration(int expiration_time,
  * Check if the cached resposne expires
  * @return false if expires or revalidate failed(new request), true use cache
  */
-bool Proxy::checkNotExpired(int server_fd, Request & request, Response & rep, int id) {
+bool Proxy::checkNotExpired(Connection & connection, Request & request, Response & rep) {
   if (rep.max_age != -1) {
     time_t rep_time = mktime(rep.response_time.getTimeStruct());
     int max_age = rep.max_age;
-    if (!compareExpiration(rep_time + max_age, rep, id, request, server_fd)) {
+    if (!compareExpiration(rep_time + max_age, connection, rep, request)) {
       return false;
     }
   }
   else if (rep.exp_str != "") {
     time_t expire_time = mktime(rep.expire_time.getTimeStruct());
-    if (!compareExpiration(expire_time, rep, id, request, server_fd)) {
+    if (!compareExpiration(expire_time, connection, rep, request)) {
       return false;
     }
   }
-  printLog(id, ": in cache, valid");
+  printLog(connection.getID(), ": in cache, valid");
   // no cache-control fields define an expiration time, cache valid
 
   return true;
@@ -231,7 +229,7 @@ bool Proxy::checkNotExpired(int server_fd, Request & request, Response & rep, in
  * A function to check if revalidate is necessary
  * @return: true if revalidate successfullly, false for new request
  */
-bool Proxy::revalidate(Response & rep, std::string raw_content, int server_fd, int id) {
+bool Proxy::revalidate(Response & rep, std::string raw_content, const Connection & c) {
   if (rep.etag == "" && rep.lastModified == "") {  // no validator available
     return true;
   }
@@ -250,18 +248,18 @@ bool Proxy::revalidate(Response & rep, std::string raw_content, int server_fd, i
   //  char req_new_msg[req_msg_str.size() + 1];
   const char * req_new_msg = changed_raw_content.c_str();
   int send_len;
-  if ((send_len = send(server_fd, req_new_msg, req_msg_str.size() + 1, 0)) >
+  if ((send_len = send(c.getServerFD(), req_new_msg, req_msg_str.size() + 1, 0)) >
       0) {  // send request with validator
     std::cout << "Verify: Send success!\n";
   }
   char new_resp[65536] = {0};
-  int new_len = recv(server_fd, &new_resp, sizeof(new_resp), 0);
+  int new_len = recv(c.getServerFD(), &new_resp, sizeof(new_resp), 0);
   if (new_len <= 0) {
     std::cout << "[Verify] received from server failed in checktime" << std::endl;
   }
   std::string checknew(new_resp, new_len);
   if (checknew.find("304 Not Modified") != std::string::npos) {  // validate success
-    printLog(id, ": NOTE revalidate successfullly");
+    printLog(c.getID(), ": NOTE revalidate successfullly");
     return true;
   }
   return false;
