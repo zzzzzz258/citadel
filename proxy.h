@@ -26,6 +26,10 @@ class Proxy {
   void run();
   static void handle(Client_Info info);
   static void handleConnect(Connection & connection, int server_fd, Request & request);
+  static void handleGet(Connection & connection,
+                        const Request & request,
+                        char * req_msg,
+                        int len);
   static void handleGetResp(Connection & connection, const Request & request);
   static void handlePOST(Connection & connection,
                          const Request & request,
@@ -37,7 +41,7 @@ class Proxy {
                                     int content_len);
   static int getLength(char * server_msg, int mes_len);
   static std::string getTime();
-  static bool checkNotExpired(Connection & c, Request & parser, Response & rep);
+  static bool checkNotExpired(Connection & c, const Request & req, Response & rep);
   static void printcache();
   static void printcachelog(Response & parse_res,
                             bool no_store,
@@ -52,13 +56,12 @@ class Proxy {
                           int client_fd,
                           char * buffer,
                           size_t buffer_size);
-  static void sendCachedResp(Response & res, int id, int client_fd);
+  static void sendResponse(Response & res, const Connection & connection);
   static bool revalidate(Response & rep, std::string raw_content, const Connection & c);
-  static void Check502(std::string entire_msg, int client_fd, int id);
   static bool compareExpiration(int expiration_time,
                                 Connection & con,
                                 Response & rep,
-                                Request & request);
+                                const Request & request);
 
   static time_t getCurrentUTCTime();
 

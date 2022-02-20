@@ -29,13 +29,15 @@ void Response::setRawContent(const std::string & msg) {
 int Response::getSize() {
   return raw_content.size();
 }
-void Response::parseStartLine(char * first_part, int len) {
+void Response::parseStartLine(const char * first_part, int len) {
   std::string first_part_str(first_part, len);
   size_t pos = first_part_str.find_first_of("\r\n");
   start_line = first_part_str.substr(0, pos);
 }
 
 void Response::parseField(char * first_msg, int len) {
+  parseChunk();
+  parseNoStore();
   std::string msg(first_msg, len);
   size_t date_pos;
   if ((date_pos = msg.find("Date: ")) != std::string::npos) {
@@ -84,5 +86,18 @@ void Response::parseChunk() {
   if ((pos = msg.find("chunked")) != std::string::npos) {
     chunked = true;
   }
-  chunked = false;
+  else {
+    chunked = false;
+  }
+}
+
+void Response::parseNoStore() {
+  std::string msg = std::string(raw_content.begin(), raw_content.end());
+  size_t nostore_pos;
+  if ((nostore_pos = msg.find("no-store")) != std::string::npos) {
+    no_store = true;
+  }
+  else {
+    no_store = false;
+  }
 }

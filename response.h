@@ -18,6 +18,7 @@ class Response {
   std::string exp_str;
   MyTime response_time;
   bool chunked;
+  bool no_store;
   bool no_cache;
   bool must_revalidate;
   // two validators
@@ -29,16 +30,18 @@ class Response {
       max_age(-1),
       exp_str(""),
       chunked(false),
+      no_store(false),
       no_cache(false),
       etag(""),
       lastModified("") {}
   std::string getStartLine() { return start_line; }
-  void parseStartLine(char * first_part, int len);  // parse and fill start line
-  int getSize();                                    // get raw content size
+  void parseStartLine(const char * first_part, int len);  // parse and fill start line
+  int getSize();                                          // get raw content size
   const std::vector<char> & getRawContent();
   const std::string getRawContentString(int size);
   void setRawContent(const std::string & msg);
   void setRawContent(const std::vector<char> & msg);
   void parseField(char * first_msg, int len);
   void parseChunk();
+  void parseNoStore();
 };
