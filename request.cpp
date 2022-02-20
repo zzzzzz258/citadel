@@ -41,7 +41,15 @@ void Request::parseNoCache() {
   size_t nocatch_pos;
   if ((nocatch_pos = raw_content.find("no-cache")) != std::string::npos) {
     no_cache = true;
-  } else {
+  }
+  else {
     no_cache = false;
   }
+}
+
+bool Request::solvable() {
+  if (method == "POST" || method == "GET" || method == "CONNECT") {
+    return true;
+  }
+  return false;
 }

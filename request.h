@@ -28,4 +28,5 @@ class Request {
   void parseRawContent();
   void parseMethod();
   void parseNoCache();
+  bool solvable();
 };
