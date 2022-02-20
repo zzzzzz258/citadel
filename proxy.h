@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <map>
+#include <string>
 #include <thread>
 #include <unordered_map>
 
@@ -11,7 +12,7 @@
 class Proxy {
  private:
   const char * port_num;
-  ///  std::ofstream logFile;
+  //  std::ofstream logFile;
   //  pthread_mutex_t mutex;
   //  std::unordered_map<std::string, Response> cache;
 
@@ -67,5 +68,12 @@ class Proxy {
   static void sendCachedResp(Response & res, int id, int client_fd);
   static bool revalidate(Response & rep, std::string input, int server_fd, int id);
   static void Check502(std::string entire_msg, int client_fd, int id);
+
   static time_t getCurrentUTCTime();
+
+  //newly added, still in testing
+  static void printLog(int id = -1,
+                       std::string content_1 = "",
+                       std::string ip = "",
+                       std::string content_2 = "");
 };
