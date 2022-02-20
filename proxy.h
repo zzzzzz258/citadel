@@ -43,10 +43,7 @@ class Proxy {
   static std::string getTime();
   static bool checkNotExpired(Connection & c, const Request & req, Response & rep);
   static void printcache();
-  static void printcachelog(Response & parse_res,
-                            bool no_store,
-                            std::string req_line,
-                            int id);
+  static void printcachelog(Response & parse_res, std::string req_line, int id);
   static void printnote(Response & parse_res, int id);
   static void sendReqAndHandleResp(Connection & connection,
                                    const Request & request,

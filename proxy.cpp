@@ -363,7 +363,7 @@ void Proxy::handleGetResp(Connection & connection, const Request & request) {
     else {  // content-length not specified, take it as whole message has been received
       send(connection.getClientFD(), server_msg, mes_len, 0);
     }
-    printcachelog(response, response.no_store, request.start_line, connection.getID());
+    printcachelog(response, request.start_line, connection.getID());
   }
   printLog(connection.getID(), ": Responding \"" + response.start_line + "\"");
 }
@@ -390,19 +390,19 @@ void Proxy::printnote(Response & response, int id) {
   }
 }
 
-void Proxy::printcachelog(Response & response,
-                          bool no_store,
-                          std::string req_start_line,
-                          int id) {
-  printLog(id, ": function printcachelog called");
+void Proxy::printcachelog(Response & response, std::string req_start_line, int id) {
+  printLog(id, ": NOTE function printcachelog called");
 
   if (response.getRawContentString(100).find("HTTP/1.1 200 OK") !=
-      std::string::npos) {  // cacheable response
-    if (no_store) {         // no-store specified
+      std::string::npos) {    // cacheable response
+    if (response.no_store) {  // no-store specified
       printLog(id, ": not cacheable because NO STORE");
       return;
     }
-    if (response.max_age != -1) {  // max-age specified
+    else if (response.no_cache) {
+      printLog(id, ": cached, but requires re-validation");
+    }
+    else if (response.max_age != -1) {  // max-age specified
       time_t dead_time =
           mktime(response.response_time.getTimeStruct()) + response.max_age;
       struct tm * asc_time = gmtime(&dead_time);
@@ -412,19 +412,25 @@ void Proxy::printcachelog(Response & response,
     else if (response.exp_str != "") {
       printLog(id, ": cached, expires at " + response.exp_str);
     }
+    else {
+      printLog(id,
+               ": not cacheable because no valid expiration time or revalidation rule is "
+               "specified");
+      return;
+    }
     // not dealing with the situation that neither max-age nor expired-time is sprcified
-    Response storedres(response);
+    //    Response storedres(response);
     mtx_cache.lock();
     if (cache.size() > 10) {
       std::unordered_map<std::string, Response>::iterator it = cache.begin();
       cache.erase(it);
     }
-    cache.insert(std::pair<std::string, Response>(req_start_line, storedres));
+    cache.insert(std::pair<std::string, Response>(req_start_line, response));
     mtx_cache.unlock();
   }
-  printLog(
-      id,
-      ": HTTP/1.1 200 OK not found in response, not cache it" + response.lastModified);
+  else {
+    printLog(id, ": not cacheable because HTTP/1.1 200 OK not found in response");
+  }
 }
 
 std::string Proxy::sendContentLen(int send_fd,
