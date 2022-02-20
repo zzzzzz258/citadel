@@ -209,7 +209,9 @@ bool Proxy::checkNotExpired(Connection & connection,
  */
 bool Proxy::revalidate(Response & rep, std::string raw_content, const Connection & c) {
   if (rep.etag == "" && rep.lastModified == "") {  // no validator available
-    return true;
+    printLog(c.getID(),
+             ": NOTE neither etag nor last-modified specified, resend request");
+    return false;
   }
   std::string changed_raw_content = raw_content;
   if (rep.etag != "") {
