@@ -45,6 +45,14 @@ void Proxy::run() {
   }
 }
 
+ void Proxy::respond400(const Connection & connection) {
+    const char * bad_request = "HTTP/1.1 400 Bad Request\r\n\r\n";
+    const char * bad_request_start_line = "HTTP/1.1 400 Bad Request";
+    send(connection.getClientFD(), bad_request, 28, 0);
+    printLog(connection.getID(), ": WARNING Invalid Request");
+    printLog(connection.getID(), ": Responding \"" + std::string(bad_request_start_line) + "\"");   
+}
+
 /**
  * @param info is a passenger of information about client
  */
@@ -56,13 +64,13 @@ void Proxy::handle(Client_Info info) {
                  sizeof(req_msg),
                  0);  // receive first request from client
   if (len <= 2) {
-    printLog(connection.getID(), ": WARNING Invalid Request");
+    respond400(connection);
     return;
   }
 
   Request request = Request(std::string(req_msg, len));
   if (!request.solvable()) {  // just shut connect for unsupported methods
-    printLog(connection.getID(), ": Unsupported request method " + request.method);
+    respond400(connection);
     return;
   }
 
@@ -278,7 +286,7 @@ void Proxy::handlePOST(Connection & connection,
       std::cout << "receive response from server which is:" << response << std::endl;
 
       send(connection.getClientFD(), response, response_len, MSG_NOSIGNAL);
-      printLog(connection.getID(), ": Responding \"" + res.getStartLine());
+      printLog(connection.getID(), ": Responding \"" + res.getStartLine() + "\"");
     }
     else {
       printLog(connection.getID(), ": ERROR scoket unexpectedly closed");
@@ -346,7 +354,7 @@ void Proxy::handleGetResp(Connection & connection, const Request & request) {
   }
   else {
     std::string server_msg_str(server_msg, mes_len);
-    printnote(response, connection.getID());           // print cache related note
+    printCacheControls(response, connection.getID());           // print cache related note
     int content_len = getLength(server_msg, mes_len);  //get content length
     if (content_len != -1) {                           // content_len specified
       std::string msg = sendContentLen(connection.getServerFD(),
@@ -365,12 +373,12 @@ void Proxy::handleGetResp(Connection & connection, const Request & request) {
     else {  // content-length not specified, take it as whole message has been received
       send(connection.getClientFD(), server_msg, mes_len, 0);
     }
-    printcachelog(response, request.start_line, connection.getID());
+    checkAndCache(response, request.start_line, connection.getID());
   }
   printLog(connection.getID(), ": Responding \"" + response.start_line + "\"");
 }
 
-void Proxy::printnote(Response & response, int id) {
+void Proxy::printCacheControls(Response & response, int id) {
   if (response.max_age != -1) {
     //C++ 11 only
     printLog(id, ": NOTE Cache-Control: max-age=" + std::to_string(response.max_age));
@@ -379,13 +387,13 @@ void Proxy::printnote(Response & response, int id) {
     printLog(id, ": NOTE Expires: " + response.exp_str);
   }
   if (response.no_cache == true) {
-    printLog(id, "NOTE Cache-Control: no-cache");
+    printLog(id, ": NOTE Cache-Control: no-cache");
   }
   if (response.no_store == true) {
-    printLog(id, "NOTE Cache-Control: no-store");
+    printLog(id, ": NOTE Cache-Control: no-store");
   }
   if (response.must_revalidate == true) {
-    printLog(id, "NOTE Cache-Control: must-revalidate");
+    printLog(id, ": NOTE Cache-Control: must-revalidate");
   }
   if (response.etag != "") {
     printLog(id, ": NOTE etag: " + response.etag);
@@ -395,9 +403,7 @@ void Proxy::printnote(Response & response, int id) {
   }
 }
 
-void Proxy::printcachelog(Response & response, std::string req_start_line, int id) {
-  printLog(id, ": NOTE function printcachelog called");
-
+void Proxy::checkAndCache(Response & response, std::string req_start_line, int id) {
   if (response.getRawContentString(100).find("HTTP/1.1 200 OK") !=
       std::string::npos) {    // cacheable response
     if (response.no_store) {  // no-store specified
@@ -423,8 +429,6 @@ void Proxy::printcachelog(Response & response, std::string req_start_line, int i
                "specified");
       return;
     }
-    // not dealing with the situation that neither max-age nor expired-time is sprcified
-    //    Response storedres(response);
     mtx_cache.lock();
     if (cache.size() > 10) {
       std::unordered_map<std::string, Response>::iterator it = cache.begin();

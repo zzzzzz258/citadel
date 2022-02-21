@@ -13,15 +13,9 @@
 class Proxy {
  private:
   const char * port_num;
-  //  std::ofstream logFile;
-  //  pthread_mutex_t mutex;
-  //  std::unordered_map<std::string, Response> cache;
-
  public:
   Proxy(const char * myport) :
       port_num(myport)
-  //logFile(logAddr),
-  //mutex(PTHREAD_MUTEX_INITIALIZER)
   {}
   void run();
   static void handle(Client_Info info);
@@ -35,6 +29,7 @@ class Proxy {
                          const Request & request,
                          char * req_msg,
                          int len);
+  static  void respond400(const Connection & connection) ;
   static std::string sendContentLen(int send_fd,
                                     char * server_msg,
                                     int mes_len,
@@ -42,9 +37,8 @@ class Proxy {
   static int getLength(char * server_msg, int mes_len);
   static std::string getTime();
   static bool checkNotExpired(Connection & c, const Request & req, Response & rep);
-  static void printcache();
-  static void printcachelog(Response & parse_res, std::string req_line, int id);
-  static void printnote(Response & parse_res, int id);
+  static void checkAndCache(Response & parse_res, std::string req_line, int id);
+  static void printCacheControls(Response & parse_res, int id);
   static void sendReqAndHandleResp(Connection & connection,
                                    const Request & request,
                                    char * req_msg,
@@ -59,10 +53,7 @@ class Proxy {
                                 Connection & con,
                                 Response & rep,
                                 const Request & request);
-
   static time_t getCurrentUTCTime();
-
-  //newly added, still in testing
   static void printLog(int id = -1,
                        std::string content_1 = "",
                        std::string ip = "",
