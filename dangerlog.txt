@@ -4,4 +4,5 @@ I can only receive mocky responses by connect method, this makes it unhelpful fo
 Cache test:
 I couldn't find a website with no-cache in response. And I couldn't find a website with Expire but without max-age. These leave two branches not tested.
 
-Exception Guarantee:
+Robust to failures:
+For our methods, we achieve strong gaurantee. We catch every error in send() and recv(), print error message in log file and exit its method gracefully.

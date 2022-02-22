@@ -1,7 +1,0 @@
-Mocky test:
-I can only receive mocky responses by connect method, this makes it unhelpful for cache tests.
-
-Cache test:
-I couldn't find a website with no-cache in response. And I couldn't find a website with Expire but without max-age. These leave two branches not tested.
-
-Exception Guarantee:
