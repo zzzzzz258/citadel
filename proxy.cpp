@@ -30,7 +30,7 @@ void Proxy::run() {
   }
   int client_fd;
   int id = 0;
-  while (1) {
+  while (1) {        
     std::string ip;
     try {
       client_fd = server_accept(temp_fd, ip);
@@ -39,22 +39,26 @@ void Proxy::run() {
       printLog(-1, "(no-id): ERROR in connecting client");
       continue;
     }
-    Client_Info client_info = Client_Info(id, client_fd, ip);
+    Client_Info client_info = Client_Info(id, client_fd, ip);      
     id++;
     std::thread(handle, std::ref(client_info)).detach();
   }
 }
 
- void Proxy::respond400(const Connection & connection) {   
-    send(connection.getClientFD(), "HTTP/1.1 400 Bad Request\r\n\r\n", 28, 0);
+ void Proxy::respond400(const Connection & connection) {      
+   if (send(connection.getClientFD(), "HTTP/1.1 400 Bad Request\r\n\r\n", 28, 0) == -1){
+     throw std::runtime_error(": ERROR send fail in respond400");
+   }
     printLog(connection.getID(), ": WARNING Invalid Request");
     printLog(connection.getID(), ": Responding \"" + std::string("HTTP/1.1 400 Bad Request") + "\"");   
 }
 
- void Proxy::respond502(const Connection & connection) {   
-    send(connection.getClientFD(), "HTTP/1.1 502 Bad Gateway\r\n\r\n", 28, 0);
-    printLog(connection.getID(), ": WARNING Invalid Request");
-    printLog(connection.getID(), ": Responding \"" + std::string("HTTP/1.1 502 Bad Gateway") + "\"");   
+ void Proxy::respond502(const Connection & connection) {
+   if (send(connection.getClientFD(), "HTTP/1.1 502 Bad Gateway\r\n\r\n", 28, 0) == -1) {
+     throw std::runtime_error(": ERROR send fail in respond400");
+   }
+   printLog(connection.getID(), ": WARNING Invalid Request");
+   printLog(connection.getID(), ": Responding \"" + std::string("HTTP/1.1 502 Bad Gateway") + "\"");   
 }
 
 /**
@@ -68,13 +72,21 @@ void Proxy::handle(Client_Info info) {
                  sizeof(req_msg),
                  0);  // receive first request from client
   if (len <= 2) {
-    respond400(connection);
+    try{
+      respond400(connection);
+    } catch(std::exception & e) {
+      printLog(connection.getID(), e.what());
+    }
     return;
   }
 
   Request request = Request(std::string(req_msg, len));
   if (!request.solvable()) {  // just shut connect for unsupported methods
-    respond400(connection);
+    try{
+      respond400(connection);
+    } catch(std::exception & e) {
+      printLog(connection.getID(), e.what());
+    }
     return;
   }
 
@@ -106,7 +118,6 @@ void Proxy::handle(Client_Info info) {
   else if (request.method == "POST") {  //handle post request
     handlePOST(connection, request, req_msg, len);
   }
-  return;
 }
 
 void Proxy::handleGet(Connection & connection,
@@ -149,7 +160,11 @@ void Proxy::sendReqAndHandleResp(Connection & connection,
   printLog(
       connection.getID(),
       ": Requesting \"" + request.start_line + "\" from " + std::string(request.host));
-  send(connection.getServerFD(), req_msg, len, 0);
+  int slen = send(connection.getServerFD(), req_msg, len, 0);
+  if (slen == -1) {
+    printLog(connection.getID(), ": ERROR failure in sending request to server");
+    return;
+  }
   handleGetResp(connection, request);
 }
 
@@ -164,7 +179,11 @@ void Proxy::sendResponse(Response & res, const Connection & connection) {
   for (int i = 0; i < res.getSize(); i++, it++) {
     cache_res[i] = *it;
   }
-  send(connection.getClientFD(), cache_res, res.getSize(), 0);
+  int slen = send(connection.getClientFD(), cache_res, res.getSize(), 0);
+  if (slen == -1) {
+    printLog(connection.getID(), ": ERROR failure in sending response from proxy to client");
+    return;
+  }
   printLog(connection.getID(), ": Responding \"" + res.start_line + "\"");
 }
 
@@ -239,14 +258,16 @@ bool Proxy::revalidate(Response & rep, std::string raw_content, const Connection
   //  char req_new_msg[req_msg_str.size() + 1];
   const char * req_new_msg = changed_raw_content.c_str();
   int send_len;
-  if ((send_len = send(c.getServerFD(), req_new_msg, req_msg_str.size() + 1, 0)) >
+  if ((send_len = send(c.getServerFD(), req_new_msg, req_msg_str.size() + 1, 0)) <
       0) {  // send request with validator
-    std::cout << "Verify: Send success!\n";
+    printLog(c.getID(), ":ERROR send validator fails");
+    return false;
   }
   char new_resp[65536] = {0};
   int new_len = recv(c.getServerFD(), &new_resp, sizeof(new_resp), 0);
   if (new_len <= 0) {
-    std::cout << "[Verify] received from server failed in checktime" << std::endl;
+    printLog(c.getID(), ":ERROR receive validation fails");
+    return false;
   }
   std::string checknew(new_resp, new_len);
   if (checknew.find("304 Not Modified") != std::string::npos) {  // validate success
@@ -271,16 +292,20 @@ void Proxy::handlePOST(Connection & connection,
         getFullResponse(connection.getClientFD(), req_msg, len, post_len);
     char send_request[full_request.length() + 1];
     strcpy(send_request, full_request.c_str());
-    send(connection.getServerFD(),
+    int slen = send(connection.getServerFD(),
          send_request,
          sizeof(send_request),
          MSG_NOSIGNAL);  // send all the request info from client to server
+    if (slen < 0) {
+      printLog(connection.getID(), ":ERROR send request to server fails");
+      return;
+    }
     char response[65536] = {0};
     int response_len = recv(connection.getServerFD(),
                             response,
                             sizeof(response),
                             MSG_WAITALL);  //first time received response from server
-    if (response_len != 0) {
+    if (response_len >= 0) {
       Response res;
       res.parseStartLine(req_msg, len);
       printLog(connection.getID(),
@@ -288,8 +313,11 @@ void Proxy::handlePOST(Connection & connection,
 
       std::cout << "receive response from server which is:" << response << std::endl;
 
-      send(connection.getClientFD(), response, response_len, MSG_NOSIGNAL);
-      printLog(connection.getID(), ": Responding \"" + res.getStartLine() + "\"");
+      if (send(connection.getClientFD(), response, response_len, MSG_NOSIGNAL) > 0) {
+        printLog(connection.getID(), ": Responding \"" + res.getStartLine() + "\"");
+      } else {
+        printLog(connection.getID(), ": ERROR Responding to client fails");
+      }      
     }
     else {
       printLog(connection.getID(), ": ERROR scoket unexpectedly closed");
@@ -321,7 +349,11 @@ void Proxy::handleGetResp(Connection & connection, const Request & request) {
                      0);  //received first response from server(all header, part body)  
   Response response;
   if (mes_len == 0) {
-    respond502(connection);
+    try{
+      respond502(connection);
+    } catch(std::exception & e) {
+      printLog(connection.getID(), e.what());
+    }
     return;
   }
   response.parseStartLine(server_msg,
@@ -333,10 +365,14 @@ void Proxy::handleGetResp(Connection & connection, const Request & request) {
   if (response.chunked) {  // chunked response, no cache, just resend
     printLog(connection.getID(), ": not cacheable because it is chunked");
 
-    send(connection.getClientFD(),
+    int slen = send(connection.getClientFD(),
          server_msg,
          mes_len,
          0);  //send first response to server
+    if (slen < 0) {
+      printLog(connection.getID(), ": WARNING send chunk breaks");
+      return;
+    }
     char chunked_msg[28000] = {0};
     while (1) {  //receive and send remaining message
       if (!passMessage(connection.getServerFD(),
@@ -364,10 +400,18 @@ void Proxy::handleGetResp(Connection & connection, const Request & request) {
       }
       const char * send_msg = large_msg.data();
       response.setRawContent(large_msg);
-      send(connection.getClientFD(), send_msg, msg.length(), 0);
+      int slen = send(connection.getClientFD(), send_msg, msg.length(), 0);
+      if (slen < 0) {
+        printLog(connection.getID(), ": ERROR send response fails");
+        return;
+      }
     }
     else {  // content-length not specified, take it as whole message has been received
-      send(connection.getClientFD(), server_msg, mes_len, 0);
+      int slen = send(connection.getClientFD(), server_msg, mes_len, 0);
+      if (slen < 0) {
+        printLog(connection.getID(), ": ERROR send response fails");
+        return;
+      }
     }
     checkAndCache(response, request.start_line, connection.getID());
   }
@@ -476,7 +520,11 @@ void Proxy::handleConnect(Connection & connection, int server_fd, Request & requ
            ": Requesting \"" + request.start_line + "\" from " + request.host);
 
   int id = connection.getID();
-  send(connection.getClientFD(), "HTTP/1.1 200 OK\r\n\r\n", 19, 0);
+  int slen = send(connection.getClientFD(), "HTTP/1.1 200 OK\r\n\r\n", 19, 0);
+  if (slen < 0) {
+    printLog(connection.getID(), ": ERROR respond connect fails");
+    return;
+  }
   printLog(id, ": Responding \"HTTP/1.1 200 OK\"");
 
   fd_set readfds;
