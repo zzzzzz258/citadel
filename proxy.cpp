@@ -45,12 +45,16 @@ void Proxy::run() {
   }
 }
 
- void Proxy::respond400(const Connection & connection) {
-    const char * bad_request = "HTTP/1.1 400 Bad Request\r\n\r\n";
-    const char * bad_request_start_line = "HTTP/1.1 400 Bad Request";
-    send(connection.getClientFD(), bad_request, 28, 0);
+ void Proxy::respond400(const Connection & connection) {   
+    send(connection.getClientFD(), "HTTP/1.1 400 Bad Request\r\n\r\n", 28, 0);
     printLog(connection.getID(), ": WARNING Invalid Request");
-    printLog(connection.getID(), ": Responding \"" + std::string(bad_request_start_line) + "\"");   
+    printLog(connection.getID(), ": Responding \"" + std::string("HTTP/1.1 400 Bad Request") + "\"");   
+}
+
+ void Proxy::respond502(const Connection & connection) {   
+    send(connection.getClientFD(), "HTTP/1.1 502 Bad Gateway\r\n\r\n", 28, 0);
+    printLog(connection.getID(), ": WARNING Invalid Request");
+    printLog(connection.getID(), ": Responding \"" + std::string("HTTP/1.1 502 Bad Gateway") + "\"");   
 }
 
 /**
@@ -109,28 +113,27 @@ void Proxy::handleGet(Connection & connection,
                       const Request & request,
                       char * req_msg,
                       int len) {
-  std::unordered_map<std::string, Response>::iterator it = cache.begin();
-  it = cache.find(request.start_line);
-  if (it == cache.end()) {  // request not found in cache
+  Response in_cache = findCache(request.start_line);
+  if (in_cache.raw_content.empty()) {  // request not found in cache
     printLog(connection.getID(), ": not in cache");
     sendReqAndHandleResp(connection, request, req_msg, len);
   }
-  else {  //request found in cache
-    if (request.no_cache || it->second.no_cache) {
+  else {  //request found in cache    
+    if (request.no_cache || in_cache.no_cache) {
       printLog(connection.getID(), ": in cache, requires validation");
-      if (revalidate(it->second, request.raw_content, connection) == false) {
+      if (revalidate(in_cache, request.raw_content, connection) == false) {
         sendReqAndHandleResp(connection, request, req_msg, len);
       }  //check Etag and Last Modified
       else {
-        sendResponse(it->second, connection);
+        sendResponse(in_cache, connection);
       }
     }  //has no-cache symbol, revalidate all the time
     else {
-      if (!checkNotExpired(connection, request, it->second)) {
+      if (!checkNotExpired(connection, request, in_cache)) {
         sendReqAndHandleResp(connection, request, req_msg, len);
-      }  // expired, or must-revalidate filed
+      }  // expired, or must-revalidate failesd
       else {
-        sendResponse(it->second, connection);
+        sendResponse(in_cache, connection);
       }  //not expired, or revalidated, send from cache
     }
   }
@@ -177,7 +180,7 @@ bool Proxy::compareExpiration(int expiration_time,
       printLog(con.getID(), ": in cache, requires validation");
       return revalidate(rep, request.raw_content, con);
     }
-    cache.erase(request.start_line);
+    removeCache(request.start_line);
     time_t dead_time = mktime(rep.expire_time.getTimeStruct());
     struct tm * asc_time = gmtime(&dead_time);
     const char * t = asctime(asc_time);
@@ -262,10 +265,10 @@ void Proxy::handlePOST(Connection & connection,
                        int len) {
   printLog(connection.getID(),
            ": Requesting \"" + request.start_line + "\" from " + request.host);
-  int post_len = getLength(req_msg, len);  //get length of client request
+  int post_len = getContentLength(req_msg, len);  //get length of client request
   if (post_len != -1) {
     std::string full_request =
-        sendContentLen(connection.getClientFD(), req_msg, len, post_len);
+        getFullResponse(connection.getClientFD(), req_msg, len, post_len);
     char send_request[full_request.length() + 1];
     strcpy(send_request, full_request.c_str());
     send(connection.getServerFD(),
@@ -315,17 +318,10 @@ void Proxy::handleGetResp(Connection & connection, const Request & request) {
   int mes_len = recv(connection.getServerFD(),
                      server_msg,
                      sizeof(server_msg),
-                     0);  //received first response from server(all header, part body)
-  //TEST
-  std::string temp(server_msg, 300);
-  std::cout << "Receive server response is: " << temp << std::endl;
-  //TEST END
+                     0);  //received first response from server(all header, part body)  
   Response response;
   if (mes_len == 0) {
-    std::string resp502("502 Bad Gateway");
-    response.parseStartLine(resp502.c_str(), resp502.length());
-    response.setRawContent(resp502);
-    sendResponse(response, connection);
+    respond502(connection);
     return;
   }
   response.parseStartLine(server_msg,
@@ -355,9 +351,9 @@ void Proxy::handleGetResp(Connection & connection, const Request & request) {
   else {
     std::string server_msg_str(server_msg, mes_len);
     printCacheControls(response, connection.getID());           // print cache related note
-    int content_len = getLength(server_msg, mes_len);  //get content length
+    int content_len = getContentLength(server_msg, mes_len);  //get content length
     if (content_len != -1) {                           // content_len specified
-      std::string msg = sendContentLen(connection.getServerFD(),
+      std::string msg = getFullResponse(connection.getServerFD(),
                                        server_msg,
                                        mes_len,
                                        content_len);  //get the entire message
@@ -425,24 +421,16 @@ void Proxy::checkAndCache(Response & response, std::string req_start_line, int i
     }
     else {
       printLog(id,
-               ": not cacheable because no valid expiration time or revalidation rule is "
-               "specified");
-      return;
+               ": cached, expired at infinite");
     }
-    mtx_cache.lock();
-    if (cache.size() > 10) {
-      std::unordered_map<std::string, Response>::iterator it = cache.begin();
-      cache.erase(it);
-    }
-    cache.insert(std::pair<std::string, Response>(req_start_line, response));
-    mtx_cache.unlock();
+    insertCache(req_start_line, response);
   }
   else {
     printLog(id, ": not cacheable because HTTP/1.1 200 OK not found in response");
   }
 }
 
-std::string Proxy::sendContentLen(int send_fd,
+std::string Proxy::getFullResponse(int send_fd,
                                   char * server_msg,
                                   int mes_len,
                                   int content_len) {
@@ -465,7 +453,7 @@ std::string Proxy::sendContentLen(int send_fd,
 /**
  * get content-length from request header
  */
-int Proxy::getLength(char * server_msg, int mes_len) {
+int Proxy::getContentLength(char * server_msg, int mes_len) {
   std::string msg(server_msg, mes_len);
   size_t pos;
   if ((pos = msg.find("Content-Length: ")) != std::string::npos) {
@@ -544,4 +532,34 @@ void Proxy::printLog(int id,
   }
 
   mtx_log.unlock();
+}
+
+Response Proxy::findCache(const std::string & start_line) {
+  mtx_cache.lock();
+  std::unordered_map<std::string, Response>::iterator it = cache.begin();
+  it = cache.find(start_line);
+  if (it == cache.end()) {
+    mtx_cache.unlock();
+    return Response();
+  }else {    
+    Response resp(it->second);
+    mtx_cache.unlock();
+    return resp;
+  }
+}
+
+void Proxy::insertCache(const std::string & start_line, Response response) {
+  mtx_cache.lock();
+  if (cache.size() > 10) {
+    std::unordered_map<std::string, Response>::iterator it = cache.begin();
+    cache.erase(it);
+  }
+  cache.insert(std::pair<std::string, Response>(start_line, response));
+  mtx_cache.unlock();
+}
+
+void Proxy::removeCache(const std::string & start_line) {
+  mtx_cache.lock();
+  cache.erase(start_line);
+  mtx_cache.unlock();
 }
