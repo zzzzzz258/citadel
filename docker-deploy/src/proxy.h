@@ -57,6 +57,7 @@ class Proxy {
                                 Response & rep,
                                 const Request & request);
   // functions to handle time
+  static std::string time_t2str(time_t t);
   static std::string getTime();
   static time_t getCurrentUTCTime();
   // thread-safe functions

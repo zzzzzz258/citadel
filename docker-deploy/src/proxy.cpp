@@ -25,7 +25,7 @@ std::unordered_map<std::string, Response> cache;
 void Proxy::run() {
   int temp_fd = build_server(this->port_num);
   if (temp_fd == -1) {
-    printLog(-1, "(no-id): ERROR in creating socket to accept");
+    printLog(-1, ": ERROR in creating socket to accept");
     return;
   }
   int client_fd;
@@ -36,7 +36,7 @@ void Proxy::run() {
       client_fd = server_accept(temp_fd, ip);
     }
     catch (std::exception & e) {
-      printLog(-1, "(no-id): ERROR in connecting client");
+      printLog(-1, ": ERROR in connecting client");
       continue;
     }
     Client_Info client_info = Client_Info(id, client_fd, ip);      
@@ -94,7 +94,7 @@ void Proxy::handle(Client_Info info) {
   printLog(connection.getID(),
            ": \"" + request.start_line + "\" from ",
            connection.getIP(),
-           " @ " + getTime().append("\0"));
+           " @ " + getTime());
 
   std::cout << "received client request is:\n" << req_msg << std ::endl;
   const char * host = request.host.c_str();
@@ -201,10 +201,8 @@ bool Proxy::compareExpiration(int expiration_time,
       return revalidate(rep, request.raw_content, con);
     }
     removeCache(request.start_line);
-    time_t dead_time = mktime(rep.expire_time.getTimeStruct());
-    struct tm * asc_time = gmtime(&dead_time);
-    const char * t = asctime(asc_time);
-    printLog(con.getID(), ": in cache, but expired at " + std::string(t));
+    time_t dead_time = mktime(rep.expire_time.getTimeStruct());    
+    printLog(con.getID(), ": in cache, but expired at " + time_t2str(dead_time));
     return false;
   }
   return true;
@@ -374,7 +372,7 @@ void Proxy::handleGetResp(Connection & connection, const Request & request) {
       printLog(connection.getID(), ": WARNING send chunk breaks");
       return;
     }
-    char chunked_msg[28000] = {0};
+    char chunked_msg[65536] = {0};
     while (1) {  //receive and send remaining message
       if (!passMessage(connection.getServerFD(),
                        connection.getClientFD(),
@@ -457,9 +455,7 @@ void Proxy::checkAndCache(Response & response, std::string req_start_line, int i
     else if (response.max_age != -1) {  // max-age specified
       time_t dead_time =
           mktime(response.response_time.getTimeStruct()) + response.max_age;
-      struct tm * asc_time = gmtime(&dead_time);
-      const char * t = asctime(asc_time);
-      printLog(id, ": cached, expires at " + std::string(t));
+      printLog(id, ": cached, expires at " + time_t2str(dead_time));
     }
     else if (response.exp_str != "") {
       printLog(id, ": cached, expires at " + response.exp_str);
@@ -551,11 +547,17 @@ void Proxy::handleConnect(Connection & connection, int server_fd, Request & requ
   printLog(connection.getID(), ": Tunnel closed");
 }
 
+std::string Proxy::time_t2str(time_t tt) {
+  struct tm * asc_time = gmtime(&tt);
+  const char * t = asctime(asc_time);
+  std::string ts(t);
+  size_t p = ts.find('\n');
+  return ts.substr(0,p);
+}
+
 std::string Proxy::getTime() {
   time_t currTime = time(0);
-  struct tm * nowTime = gmtime(&currTime);
-  const char * t = asctime(nowTime);
-  return std::string(t);
+  return time_t2str(currTime);
 }
 
 time_t getCurrentUTCTime() {
@@ -571,7 +573,7 @@ void Proxy::printLog(int id,
                      std::string content_2) {
   mtx_log.lock();
   if (id == -1) {
-    logFile << content_1 << std::endl;
+    logFile << "(no-id)" << content_1 << std::endl;
   }
   if (id != -1 && ip == "") {
     logFile << id << content_1 << std::endl;
@@ -599,16 +601,21 @@ Response Proxy::findCache(const std::string & start_line) {
 
 void Proxy::insertCache(const std::string & start_line, Response response) {
   mtx_cache.lock();
-  if (cache.size() > 20) {
-    std::unordered_map<std::string, Response>::iterator it = cache.begin();
+  if (cache.size() >= 10) {
+    std::unordered_map<std::string, Response>::iterator it = cache.begin();    
+    printLog(-1, ": NOTE remove " + it->first + " from cache");
     cache.erase(it);
   }
   cache.insert(std::pair<std::string, Response>(start_line, response));
+  printLog(-1, ": NOTE insert " + start_line + " into cache");
+  printLog(-1, ": NOTE cache size " + std::to_string(cache.size()));
   mtx_cache.unlock();
 }
 
 void Proxy::removeCache(const std::string & start_line) {
   mtx_cache.lock();
   cache.erase(start_line);
+  printLog(-1, ": NOTE remove " + start_line + " from cache");
+  printLog(-1, ": NOTE cache size " + std::to_string(cache.size()));
   mtx_cache.unlock();
 }
