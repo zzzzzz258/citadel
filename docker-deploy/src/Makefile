@@ -6,4 +6,4 @@ main: main.cpp function.cpp proxy.cpp proxy.h request.cpp response.cpp mytime.cp
 .PHONY:
 	clean
 clean:
-	rm -rf *.o main
+	rm -rf *.o main *~ *#
