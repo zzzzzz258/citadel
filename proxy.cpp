@@ -55,9 +55,9 @@ void Proxy::run() {
 
  void Proxy::respond502(const Connection & connection) {
    if (send(connection.getClientFD(), "HTTP/1.1 502 Bad Gateway\r\n\r\n", 28, 0) == -1) {
-     throw std::runtime_error(": ERROR send fail in respond400");
+     throw std::runtime_error(": ERROR send fail in respond502");
    }
-   printLog(connection.getID(), ": WARNING Invalid Request");
+   printLog(connection.getID(), ": WARNING Invalid Response");
    printLog(connection.getID(), ": Responding \"" + std::string("HTTP/1.1 502 Bad Gateway") + "\"");   
 }
 
@@ -71,7 +71,7 @@ void Proxy::handle(Client_Info info) {
                  req_msg,
                  sizeof(req_msg),
                  0);  // receive first request from client
-  if (len <= 2) {
+  if (len < 0) {
     try{
       respond400(connection);
     } catch(std::exception & e) {
@@ -85,6 +85,7 @@ void Proxy::handle(Client_Info info) {
     try{
       respond400(connection);
     } catch(std::exception & e) {
+      printLog(connection.getID(), ": NOTE request method " + request.method);
       printLog(connection.getID(), e.what());
     }
     return;
@@ -598,7 +599,7 @@ Response Proxy::findCache(const std::string & start_line) {
 
 void Proxy::insertCache(const std::string & start_line, Response response) {
   mtx_cache.lock();
-  if (cache.size() > 10) {
+  if (cache.size() > 20) {
     std::unordered_map<std::string, Response>::iterator it = cache.begin();
     cache.erase(it);
   }
